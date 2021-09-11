@@ -80,19 +80,22 @@ def make_argument_parser() -> ArgumentParser:
 	parser.add_argument('input', help='input EDF file to process')
 	parser.add_argument('-q', '--quiet', action='store_true', help='do not show messages')
 	parser.add_argument('-m', '--montage', choices=[name for name, _ in MONTAGES], default=MONTAGES[0][0], help='apply selected montage')
-	parser.add_argument('-c', '--channels', type=str, nargs='+', help='include selected channels')
 	parser.add_argument('-e', '--exclude', type=str, nargs='+', help='exclude selected channels')
+	parser.add_argument('-c', '--channels', type=str, nargs='+', help='include selected channels')
 	parser.add_argument('--ecg', type=str, nargs='+', help='mark channels as ECG channels')
 	parser.add_argument('--eog', type=str, nargs='+', help='mark channels as EOG channels')
 	parser.add_argument('--stim', type=str, nargs='+', help='mark channels as STIM channels')
 	parser.add_argument('--bads', type=str, nargs='+', help='mark channels as bad channels')
-	parser.add_argument('-i', '--ica', action='store_true', help='perform ICA decomposition')
-	parser.add_argument('-is', '--ica-seed', type=int, help='set seed for deterministic ICA results')
-	parser.add_argument('-im', '--ica-method', choices=ICA_METHODS, default=ICA_METHODS[0], help='ICA method to use')
-	parser.add_argument('-ie', '--ica-exclude', nargs='*', help='ICA components to exclude from result')
 	parser.add_argument('-fl', '--filter-low', type=float, default=1, help='low frequency signal limit in Hz')
 	parser.add_argument('-fh', '--filter-high', type=float, default=70, help='high frequency signal limit in Hz')
 	parser.add_argument('-fn', '--filter-notch', default='europe', help='notch frequency signal limit in Hz')
+	parser.add_argument('-i', '--ica', action='store_true', help='perform ICA decomposition')
+	parser.add_argument('--ica-seed', type=int, help='set seed for deterministic ICA results')
+	parser.add_argument('--ica-method', choices=ICA_METHODS, default=ICA_METHODS[0], help='ICA method to use')
+	parser.add_argument('--ica-exclude', nargs='*', help='ICA components to exclude from result')
+	parser.add_argument('--exclude-ecg', action='store_true', help='exclude ICA sources detected as ECG')
+	parser.add_argument('--exclude-eog', action='store_true', help='exclude ICA sources detected as EOG')
+	parser.add_argument('--show-sources', action='store_true', help='show ICA sources')
 	parser.add_argument('--show-components', action='store_true', help='show ICA components')
 	parser.add_argument('--show', action='store_true', help='show result EEG data')
 	parser.add_argument('-o', '--output', help='save preprocessed EEG data to FIF file')
@@ -138,7 +141,7 @@ def parse_notch_filter_freqs(freq: Union[str, int]) -> Optional[int]:
 	elif freq == 'usa':
 		freq = 60
 	
-	if type(freq) is int:
+	if isinstance(freq, int):
 		freq = np.arange(freq, freq * 5 + 1, freq)
 		return freq
 	
@@ -189,11 +192,22 @@ def main() -> None:
 	
 	if args.ica is True:
 		ica = get_ica_components(filtered, method=args.ica_method, seed=args.ica_seed)
-		if args.ica_exclude is None:
+		
+		if args.ica_exclude is not None:
+			ica.exclude.extend(args.ica_exclude)
+		if args.exclude_ecg is True:
+			ecg_ids, _ = ica.find_bads_ecg(filtered)
+			ica.exclude.extend(ecg_ids)
+		if args.exclude_eog is True:
+			eog_ids, _ = ica.find_bads_eog(filtered)
+			ica.exclude.extend(eog_ids)
+		
+		if args.ica_exclude is None or args.show_sources is True:
 			ica.plot_sources(inst=filtered, block=False)
 		if args.show_components is True:
 			ica.plot_components(inst=filtered)
-		ica.apply(filtered, exclude=args.ica_exclude)
+		
+		ica.apply(filtered)
 		plt.show()
 	
 	if args.show:
