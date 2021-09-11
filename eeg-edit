@@ -23,15 +23,15 @@ Channel = Union[str, Tuple[str, str]]
 REF_1020 = [
 	
 	# Monopolar channels
-	 'Fp1', 'Fp2',   'F9',   'F7',  'F3',  'Fz',
-	  'F4',  'F8',  'F10',  'FT9', 'FT7', 'FT8',
-	'FT10',  'T9',   'T7',   'C3',  'Cz',  'C4',
-	  'T8', 'T10',  'TP9',  'TP7', 'CPz', 'TP8',
-	'TP10',  'P9',   'P7',   'P3',  'Pz',  'P4',
-	  'P8', 'P10',  'PO7',  'PO8',  'O1',  'O2',
+	 'Fp1', 'Fp2',   'F9',   'F7',   'F3',  'Fz',
+	  'F4',  'F8',  'F10',  'FT9',  'FT7', 'FT8',
+	'FT10',  'T9',   'T7',   'C3',   'Cz',  'C4',
+	  'T8', 'T10',  'TP9',  'TP7',  'CPz', 'TP8',
+	'TP10',  'P9',   'P7',   'P3',   'Pz',  'P4',
+	  'P8', 'P10',  'PO7',  'PO8',   'O1',  'O2',
 	  
 	# Misc channels
-	  'A1',  'A2', 'ECG1', 'ECG2',
+	  'A1',  'A2', 'ECG1', 'ECG2', 'TRIG',
 	
 ]
 
@@ -45,7 +45,7 @@ BANANA_1020 = [
 	('Fp2', 'F4'), ('F4', 'C4'), ('C4', 'P4'), ('P4', 'O2'),
 	
 	# Misc channels
-	'A1', 'A2', 'ECG1', 'ECG2',
+	'A1', 'A2', 'ECG1', 'ECG2', 'TRIG',
 
 ]
 
@@ -59,7 +59,7 @@ TRANSVERSE_1020 = [
 	('T5',  'O1'), ( 'O1',  'O2'), ( 'O2', 'T6'),
 	
 	# Misc channels
-	'A1', 'A2', 'ECG1', 'ECG2',
+	'A1', 'A2', 'ECG1', 'ECG2', 'TRIG',
 
 ]
 
@@ -106,7 +106,7 @@ def load_eeg_file(fname: str) -> Optional[Raw]:
 	return None
 
 def load_edf_file(fname: str) -> Raw:
-	raw = read_raw_edf(fname, preload=True)
+	raw = read_raw_edf(fname, stim_channel='TRIG', preload=True)
 	raw.rename_channels({'FP1': 'Fp1', 'FP2': 'Fp2',
 	                      'OD':  'A1',  'OI': 'A2'})
 	return raw
