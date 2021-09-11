@@ -167,8 +167,12 @@ def main() -> None:
 	if args.exclude is not None:
 		raw.drop_channels(args.exclude)
 	
-	if args.ecg is not None:
+	if args.ecg is None:
+		raw.set_channel_types({ch: 'ecg' for ch in raw.ch_names
+		                                 if ch.startswith('ECG')})
+	else:
 		raw.set_channel_types({ch: 'ecg' for ch in args.ecg})
+	
 	if args.eog is not None:
 		raw.set_channel_types({ch: 'eog' for ch in args.eog})
 	if args.stim is not None:
