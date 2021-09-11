@@ -90,7 +90,7 @@ def make_argument_parser() -> ArgumentParser:
 	parser.add_argument('-im', '--ica-method', choices=ICA_METHODS, default=ICA_METHODS[0], help='ICA method to use')
 	parser.add_argument('-ie', '--ica-exclude', nargs='*', help='ICA components to exclude from result')
 	parser.add_argument('-fl', '--filter-low', type=float, default=1, help='low frequency signal limit in Hz')
-	parser.add_argument('-fh', '--filter-high', type=float, default=100, help='high frequency signal limit in Hz')
+	parser.add_argument('-fh', '--filter-high', type=float, default=70, help='high frequency signal limit in Hz')
 	parser.add_argument('-fn', '--filter-notch', default='europe', help='notch frequency signal limit in Hz')
 	parser.add_argument('--show-components', action='store_true', help='show ICA components')
 	parser.add_argument('--show', action='store_true', help='show result EEG data')
