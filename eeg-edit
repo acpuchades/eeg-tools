@@ -113,9 +113,10 @@ def load_edf_file(fname: str) -> Raw:
 	return raw
 
 def apply_signal_filters(raw: Raw, low_filter=1, high_filter=100, notch_filter=50) -> None:
-	filtered = raw.filter(l_freq=low_filter, h_freq=high_filter)
+	sig_channels = ['eeg', 'meg']
+	filtered = raw.filter(l_freq=low_filter, h_freq=high_filter, picks=sig_channels)
 	if notch_filter is not None:
-		filtered.notch_filter(notch_filter)
+		filtered.notch_filter(notch_filter, picks=sig_channels)
 
 def setup_montage_channels(raw: Raw, channels: List[Channel]) -> None:
 	included = [ch for ch in channels if isinstance(ch, str)]
