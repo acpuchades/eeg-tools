@@ -86,7 +86,7 @@ def make_argument_parser() -> ArgumentParser:
 	parser.add_argument('--stim', type=str, nargs='+', help='mark channels as STIM channels')
 	parser.add_argument('--bads', type=str, nargs='+', help='mark channels as bad channels')
 	parser.add_argument('-i', '--ica', action='store_true', help='perform ICA decomposition')
-	parser.add_argument('-is', '--ica-seed', type=int, help='set seed for deterministic results')
+	parser.add_argument('-is', '--ica-seed', type=int, help='set seed for deterministic ICA results')
 	parser.add_argument('-im', '--ica-method', choices=ICA_METHODS, default=ICA_METHODS[0], help='ICA method to use')
 	parser.add_argument('-ie', '--ica-exclude', nargs='*', help='ICA components to exclude from result')
 	parser.add_argument('-fl', '--filter-low', type=float, default=1, help='low frequency signal limit in Hz')
@@ -111,7 +111,7 @@ def load_edf_file(fname: str) -> Raw:
 	                      'OD':  'A1',  'OI': 'A2'})
 	return raw
 
-def apply_signal_filters(raw: Raw, low_filter=1, high_filter=100, notch_filter=None) -> None:
+def apply_signal_filters(raw: Raw, low_filter=1, high_filter=100, notch_filter=50) -> None:
 	filtered = raw.filter(l_freq=low_filter, h_freq=high_filter)
 	if notch_filter is not None:
 		filtered.notch_filter(notch_filter)
