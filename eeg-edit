@@ -68,11 +68,12 @@ ICA_METHODS = [
 ]
 
 MONTAGES = [
-	('ref_1020', Montage(system='standard_1020', ref=['A1', 'A2'], channels=REF_1020)),
-	('average_1020', Montage(system='standard_1020', ref='average', channels=REF_1020)),
-	('banana_1020', Montage(system='standard_1020', channels=BANANA_1020)),
-	('transverse_1020', Montage(system='standard_1020', channels=TRANSVERSE_1020)),
+	('average_std1020', Montage(system='standard_1020', ref='average', channels=REF_1020)),
+	('ref_std1020', Montage(system='standard_1020', ref=['A1', 'A2'], channels=REF_1020)),
+	('banana_std1020', Montage(system='standard_1020', channels=BANANA_1020)),
+	('transverse_std1020', Montage(system='standard_1020', channels=TRANSVERSE_1020)),
 ]
+
 
 def make_argument_parser() -> ArgumentParser:
 	parser = ArgumentParser(description='EEG signal data preprocessing tool')
@@ -117,13 +118,12 @@ def apply_signal_filters(raw: Raw, low_filter=1, high_filter=100, notch_filter=5
 		filtered.notch_filter(notch_filter)
 
 def setup_montage_channels(raw: Raw, channels: List[Channel]) -> None:
-	included = []
-	for ch in channels:
-		if isinstance(ch, tuple):
-			mne.set_bipolar_reference(raw, ch[0], ch[1], drop_refs=False, copy=False)
-			included.append(f'{ch[0]}-{ch[1]}')
-		else:
-			included.append(ch)
+	included = [ch for ch in channels if isinstance(ch, str)]
+	ch_pairs = [ch for ch in channels if isinstance(ch, tuple)]
+	if len(ch_pairs) > 0:
+		anodes, cathodes = [a for a, _ in ch_pairs], [c for _, c in ch_pairs]
+		mne.set_bipolar_reference(raw, anodes, cathodes, drop_refs=False, copy=False)
+		included = [f'{a}-{c}' for a, c in zip(anodes, cathodes)] + included
 	raw.pick_channels(included, ordered=True)
 
 def get_ica_components(raw: Raw, method='fastica', seed=None) -> ICA:
