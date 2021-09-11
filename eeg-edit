@@ -193,9 +193,11 @@ def main() -> None:
 		if args.show_components is True:
 			ica.plot_components(inst=filtered)
 		ica.apply(filtered, exclude=args.ica_exclude)
+		plt.show()
 	
 	if args.show:
 		filtered.plot(block=True)
+		plt.show()
 	
 	if args.output is not None:
 		filtered.save(args.output, overwrite=True)
