@@ -90,14 +90,16 @@ def make_argument_parser() -> ArgumentParser:
 	parser.add_argument('-fh', '--filter-high', type=float, default=70, help='high frequency signal limit in Hz')
 	parser.add_argument('-fn', '--filter-notch', default='europe', help='notch frequency signal limit in Hz')
 	parser.add_argument('-i', '--ica', action='store_true', help='perform ICA decomposition')
-	parser.add_argument('--pca-components', type=int, help='number of PCA components to extract')
+	pca_opts = parser.add_mutually_exclusive_group()
+	pca_opts.add_argument('--pca-count', type=int, help='number of PCA components to keep')
+	pca_opts.add_argument('--pca-variance', type=float, default=.95, help='keep as many PCA components as to explain given variance')
 	parser.add_argument('--ica-seed', type=int, help='seed for deterministic ICA results')
 	parser.add_argument('--ica-method', choices=ICA_METHODS, default=ICA_METHODS[0], help='ICA method to use')
 	parser.add_argument('--ica-exclude', nargs='*', help='ICA components to exclude from result')
 	parser.add_argument('--exclude-ecg', action='store_true', help='exclude ICA sources detected as ECG')
 	parser.add_argument('--exclude-eog', action='store_true', help='exclude ICA sources detected as EOG')
-	parser.add_argument('--show-sources', action='store_true', help='show ICA sources')
-	parser.add_argument('--show-components', action='store_true', help='show ICA components')
+	parser.add_argument('--show-components', action='store_true', help='show ICA sources')
+	parser.add_argument('--show-sources', action='store_true', help='show ICA components')
 	parser.add_argument('--show', action='store_true', help='show result EEG data')
 	parser.add_argument('-o', '--output', help='save preprocessed EEG data to FIF file')
 	return parser
@@ -117,10 +119,9 @@ def load_edf_file(fname: str) -> Raw:
 	return raw
 
 def apply_signal_filters(raw: Raw, low_filter: float = 1, high_filter: float = 100, notch_filter: float =50) -> None:
-	sig_channels = ['eeg', 'meg']
-	filtered = raw.filter(l_freq=low_filter, h_freq=high_filter, picks=sig_channels)
+	filtered = raw.filter(l_freq=low_filter, h_freq=high_filter, picks='data')
 	if notch_filter is not None:
-		filtered.notch_filter(notch_filter, picks=sig_channels)
+		filtered.notch_filter(notch_filter, picks='data')
 
 def setup_montage_channels(raw: Raw, channels: List[Channel]) -> None:
 	included = [ch for ch in channels if isinstance(ch, str)]
@@ -131,9 +132,9 @@ def setup_montage_channels(raw: Raw, channels: List[Channel]) -> None:
 		included = [f'{a}-{c}' for a, c in zip(anodes, cathodes)] + included
 	raw.pick_channels(included, ordered=True)
 
-def get_ica_components(raw: Raw, method: str = 'fastica', pca_components: int = None, seed: float = None) -> ICA:
+def get_ica_components(raw: Raw, method: str = 'fastica', pca_components: float = None, seed: float = None) -> ICA:
 	ica = ICA(max_iter='auto', n_components=pca_components, random_state=seed)
-	ica.fit(raw)
+	ica.fit(raw, picks='data')
 	return ica
 
 def parse_notch_filter_freqs(freq: Union[str, float]) -> Optional[float]:
@@ -192,8 +193,9 @@ def main() -> None:
 	                               notch_filter=notch_freqs)
 	
 	if args.ica is True:
+		pca_components = args.pca_count or args.pca_variance
 		ica = get_ica_components(filtered, method=args.ica_method,
-		                         pca_components=args.pca_components,
+		                         pca_components=pca_components,
 		                         seed=args.ica_seed)
 		
 		if args.ica_exclude is not None:
@@ -205,9 +207,9 @@ def main() -> None:
 			eog_ids, _ = ica.find_bads_eog(filtered)
 			ica.exclude.extend(eog_ids)
 		
-		if args.ica_exclude is None or args.show_sources is True:
+		if args.ica_exclude is None or args.show_components is True:
 			ica.plot_sources(inst=filtered, block=False)
-		if args.show_components is True:
+		if args.show_sources is True:
 			ica.plot_components(inst=filtered)
 		
 		ica.apply(filtered)
