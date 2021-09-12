@@ -30,8 +30,15 @@ REF_METHODS = [
 	'average', 'ears'
 ]
 
+def parse_optional(t: Callable[[str], any]):
+	return lambda x: None if x.lower() == 'none' else t(x)
+
+def parse_with_mapping(t: Callable[[str], any], mapping: Mapping[str, any]):
+	return lambda x: mapping.get(x) or t(x)
+
 def make_argument_parser() -> ArgumentParser:
 	MONTAGE_NAMES = [k for k in MONTAGES.keys()]
+	parse_notch_filter = parse_optional(parse_with_mapping(float, {'europe': 50, 'usa': 60}))
 	parser = ArgumentParser(description='EEG signal data preprocessing tool')
 	parser.add_argument('input', help='input EDF file to process')
 	parser.add_argument('-q', '--quiet', action='store_true', help='do not show messages')
@@ -43,9 +50,9 @@ def make_argument_parser() -> ArgumentParser:
 	parser.add_argument('--eog', type=str, nargs='+', help='mark channels as EOG channels')
 	parser.add_argument('--stim', type=str, nargs='+', help='mark channels as STIM channels')
 	parser.add_argument('--bads', type=str, nargs='+', help='mark channels as bad channels')
-	parser.add_argument('-fl', '--filter-low', type=float, default=.3, help='low frequency filter in Hz')
-	parser.add_argument('-fh', '--filter-high', type=float, default=70, help='high frequency filter in Hz')
-	parser.add_argument('-fn', '--filter-notch', default='europe', help='notch frequency filter in Hz')
+	parser.add_argument('-fl', '--filter-low', type=parse_optional(float), default=.3, help='low frequency filter in Hz')
+	parser.add_argument('-fh', '--filter-high', type=parse_optional(float), default=70, help='high frequency filter in Hz')
+	parser.add_argument('-fn', '--filter-notch', type=parse_notch_filter, default='europe', help='notch frequency filter in Hz')
 	parser.add_argument('-i', '--ica', action='store_true', help='perform ICA decomposition')
 	pca_opts = parser.add_mutually_exclusive_group()
 	pca_opts.add_argument('--pca-count', type=int, help='number of PCA components to keep')
@@ -79,18 +86,6 @@ def perform_ica_analysis(raw: Raw, method: str = 'fastica', pca_components: floa
 	ica = ICA(max_iter='auto', n_components=pca_components, random_state=seed)
 	return ica.fit(raw)
 
-def parse_notch_filter_freqs(freq: Union[str, float]) -> Optional[float]:
-	if freq == 'europe':
-		freq = 50
-	elif freq == 'usa':
-		freq = 60
-	
-	if isinstance(freq, int):
-		freq = np.arange(freq, freq * 5 + 1, freq)
-		return freq
-	
-	return None
-
 def is_ica_analysis_required(args: Mapping[str, any]) -> bool:
 	return args.ica         or \
 	       args.ica_exclude or \
@@ -104,6 +99,7 @@ def main() -> Optional[int]:
 		return -1
 	
 	args = parser.parse_args()
+	
 	if args.quiet:
 		mne.set_log_level('warning')
 	
@@ -131,11 +127,15 @@ def main() -> Optional[int]:
 	
 	raw.set_eeg_reference(args.reference)
 	raw.set_montage(args.montage, on_missing='warn')
+
+	fnotch_freqs = None
+	if isinstance(args.filter_notch, float):
+		freq = args.filter_notch
+		fnotch_freqs = np.arange(freq, 5 * freq + 1, freq)
 	
-	notch_freqs = parse_notch_filter_freqs(args.filter_notch)
 	apply_signal_filters(raw, low_filter=args.filter_low,
 	                          high_filter=args.filter_high,
-	                          notch_filter=notch_freqs)
+	                          notch_filter=fnotch_freqs)
 	
 	if is_ica_analysis_required(args):
 		filtered = raw.copy().pick('data')
@@ -176,7 +176,10 @@ def main() -> Optional[int]:
 		raw.plot(block=True)
 	
 	if args.output:
-		raw.save(args.output, overwrite=True)
+		if args.output.lower().endswith('.fif'):
+			raw.save(args.output, overwrite=True)
+		else:
+			raw.export(args.output)
 
 
 if __name__ == '__main__':
