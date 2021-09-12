@@ -1,9 +1,8 @@
 #!/usr/bin/python3
 
 import sys
-from dataclasses import dataclass
+from typing import *
 from argparse import ArgumentParser
-from typing import List, Mapping, Optional, Union, Tuple
 
 import mne
 import numpy as np
@@ -11,76 +10,33 @@ import matplotlib.pyplot as plt
 from mne.preprocessing import ICA
 from mne.io import Raw, read_raw
 
-
-@dataclass
-class Montage:
-	system: str
-	channels: list
-	ref: str = None
-
-Channel = Union[str, Tuple[str, str]]
-
-
-REF_1020 = [
-	
-	# Monopolar channels
-	 'Fp1', 'Fp2',   'F9',   'F7',  'F3',  'Fz',
-	  'F4',  'F8',  'F10',  'FT9', 'FT7', 'FT8',
-	'FT10',  'T9',   'T7',   'C3',  'Cz',  'C4',
-	  'T8', 'T10',  'TP9',  'TP7', 'CPz', 'TP8',
-	'TP10',  'P9',   'P7',   'P3',  'Pz',  'P4',
-	  'P8', 'P10',  'PO7',  'PO8',  'O1',  'O2',
-	  
-	# Misc channels
-	  'A1',  'A2', 'ECG1', 'ECG2',
-	
-]
-
-BANANA_1020 = [
-	
-	# Bipolar channels
-	('Fp1', 'F7'), ('F7', 'T7'), ('T7', 'P7'), ('T7', 'O1'),
-	('Fp2', 'F8'), ('F8', 'T8'), ('T8', 'P8'), ('P8', 'O2'),
-	( 'Fz', 'Cz'), ('Cz', 'Pz'),
-	('Fp1', 'F3'), ('F3', 'C3'), ('C3', 'P3'), ('P3', 'O1'),
-	('Fp2', 'F4'), ('F4', 'C4'), ('C4', 'P4'), ('P4', 'O2'),
-	
-	# Misc channels
-	'A1', 'A2', 'ECG1', 'ECG2',
-
-]
-
-TRANSVERSE_1020 = [
-	
-	# Bipolar channels
-	('F7', 'Fp1'), ('Fp1', 'Fp2'), ('Fp2', 'F8'),
-	('F7',  'F3'), ( 'F3',  'Fz'), ( 'Fz', 'F4'), ('F4', 'F8'),
-	('T3',  'C3'), ( 'C3',  'Cz'), ( 'Cz', 'C4'), ('C4', 'T4'),
-	('T5',  'P3'), ( 'P3',  'Pz'), ( 'Pz', 'P4'), ('P4', 'T6'),
-	('T5',  'O1'), ( 'O1',  'O2'), ( 'O2', 'T6'),
-	
-	# Misc channels
-	'A1', 'A2', 'ECG1', 'ECG2',
-
-]
-
 ICA_METHODS = [
 	'fastica', 'infomax', 'picard',
 ]
 
-MONTAGES = [
-	('average_std1020', Montage(system='standard_1020', ref='average', channels=REF_1020)),
-	('ref_std1020', Montage(system='standard_1020', ref=['A1', 'A2'], channels=REF_1020)),
-	('banana_std1020', Montage(system='standard_1020', channels=BANANA_1020)),
-	('transverse_std1020', Montage(system='standard_1020', channels=TRANSVERSE_1020)),
+MONTAGES = {
+	'standard_1020': [
+		 'Fp1', 'Fp2',   'F9',   'F7',  'F3',  'Fz',
+		  'F4',  'F8',  'F10',  'FT9', 'FT7', 'FT8',
+		'FT10',  'T9',   'T7',   'C3',  'Cz',  'C4',
+		  'T8', 'T10',  'TP9',  'TP7', 'CPz', 'TP8',
+		'TP10',  'P9',   'P7',   'P3',  'Pz',  'P4',
+		  'P8', 'P10',  'PO7',  'PO8',  'O1',  'O2',
+		  'A1',  'A2', 'ECG1', 'ECG2',
+	],
+}
+
+REF_METHODS = [
+	'average', 'ears'
 ]
 
-
 def make_argument_parser() -> ArgumentParser:
+	MONTAGE_NAMES = [k for k in MONTAGES.keys()]
 	parser = ArgumentParser(description='EEG signal data preprocessing tool')
 	parser.add_argument('input', help='input EDF file to process')
 	parser.add_argument('-q', '--quiet', action='store_true', help='do not show messages')
-	parser.add_argument('-m', '--montage', choices=[name for name, _ in MONTAGES], default=MONTAGES[0][0], help='apply selected montage')
+	parser.add_argument('-m', '--montage', choices=MONTAGE_NAMES, default=MONTAGE_NAMES[0], help='apply selected montage')
+	parser.add_argument('-r', '--reference', nargs='+', default='average', help='reference channels to use'),
 	parser.add_argument('-e', '--exclude', type=str, nargs='+', help='exclude selected channels')
 	parser.add_argument('-c', '--channels', type=str, nargs='+', help='include selected channels')
 	parser.add_argument('--ecg', type=str, nargs='+', help='mark channels as ECG channels')
@@ -118,15 +74,6 @@ def apply_signal_filters(raw: Raw, low_filter: float = 1, high_filter: float = 1
 	if notch_filter is not None:
 		filtered.notch_filter(notch_filter, picks='data')
 
-def setup_montage_channels(raw: Raw, channels: List[Channel]) -> None:
-	included = [ch for ch in channels if isinstance(ch, str)]
-	ch_pairs = [ch for ch in channels if isinstance(ch, tuple)]
-	if ch_pairs:
-		anodes, cathodes = [a for a, _ in ch_pairs], [c for _, c in ch_pairs]
-		mne.set_bipolar_reference(raw, anodes, cathodes, drop_refs=False, copy=False)
-		included = [f'{a}-{c}' for a, c in zip(anodes, cathodes)] + included
-	raw.pick_channels(included, ordered=True)
-
 def perform_ica_analysis(raw: Raw, method: str = 'fastica', pca_components: float = None, seed: float = None) -> ICA:
 	ica = ICA(max_iter='auto', n_components=pca_components, random_state=seed)
 	ica.fit(raw, picks='data')
@@ -161,16 +108,8 @@ def main() -> Optional[int]:
 		mne.set_log_level('warning')
 	
 	raw = load_file(args.input)
-	montage = dict(MONTAGES).get(args.montage)
-	raw.set_montage(montage.system, on_missing='ignore')
-	if montage.ref is not None:
-		raw.set_eeg_reference(montage.ref)
-	setup_montage_channels(raw, montage.channels)
-
-	if args.channels is not None:
-		raw.pick_channels(args.channels, ordered=True)
-	if args.exclude is not None:
-		raw.drop_channels(args.exclude)
+	channels = MONTAGES.get(args.montage)
+	raw.pick_channels(channels, ordered=True)
 	
 	if args.ecg is None:
 		raw.set_channel_types({ch: 'ecg' for ch in raw.ch_names
@@ -184,6 +123,14 @@ def main() -> Optional[int]:
 		raw.set_channel_types({ch: 'stim' for ch in args.stim})
 	if args.bads is not None:
 		raw.info['bads'].extend(args.bads)
+	
+	if args.channels:
+		raw.pick(args.channels)
+	if args.exclude:
+		raw.drop_channels(args.exclude)
+	
+	raw.set_eeg_reference(args.reference)
+	raw.set_montage(args.montage, on_missing='warn')
 	
 	notch_freqs = parse_notch_filter_freqs(args.filter_notch)
 	apply_signal_filters(raw, low_filter=args.filter_low,
@@ -211,7 +158,7 @@ def main() -> Optional[int]:
 			ica.plot_components(inst=filtered, show=False)
 			plt.show(block=False)
 		
-		if not args.exclude or args.show_components:
+		if args.ica or args.show_components:
 			ica.plot_sources(inst=filtered, block=True)
 		
 		ica.apply(raw)
@@ -225,9 +172,13 @@ def main() -> Optional[int]:
 
 if __name__ == '__main__':
 	try:
-		res = main()
-		sys.exit(res)
+		ret = main()
+		sys.exit(ret)
 	
 	except KeyboardInterrupt:
 		print('Interrupted.', file=sys.stderr)
+		sys.exit(-1)
+	
+	except Exception as e:
+		print(f'Error: {e}.', file=sys.stderr)
 		sys.exit(-1)
