@@ -1,14 +1,15 @@
 #!/usr/bin/python3
 
-import mne, sys
-import numpy as np
-import matplotlib.pyplot as plt
-
+import sys
 from dataclasses import dataclass
 from argparse import ArgumentParser
-from mne.io import Raw, read_raw_edf
+from typing import List, Mapping, Optional, Union, Tuple
+
+import mne
+import numpy as np
+import matplotlib.pyplot as plt
 from mne.preprocessing import ICA
-from typing import List, Optional, Union, Tuple
+from mne.io import Raw, read_raw
 
 
 @dataclass
@@ -23,15 +24,15 @@ Channel = Union[str, Tuple[str, str]]
 REF_1020 = [
 	
 	# Monopolar channels
-	 'Fp1', 'Fp2',   'F9',   'F7',   'F3',  'Fz',
-	  'F4',  'F8',  'F10',  'FT9',  'FT7', 'FT8',
-	'FT10',  'T9',   'T7',   'C3',   'Cz',  'C4',
-	  'T8', 'T10',  'TP9',  'TP7',  'CPz', 'TP8',
-	'TP10',  'P9',   'P7',   'P3',   'Pz',  'P4',
-	  'P8', 'P10',  'PO7',  'PO8',   'O1',  'O2',
+	 'Fp1', 'Fp2',   'F9',   'F7',  'F3',  'Fz',
+	  'F4',  'F8',  'F10',  'FT9', 'FT7', 'FT8',
+	'FT10',  'T9',   'T7',   'C3',  'Cz',  'C4',
+	  'T8', 'T10',  'TP9',  'TP7', 'CPz', 'TP8',
+	'TP10',  'P9',   'P7',   'P3',  'Pz',  'P4',
+	  'P8', 'P10',  'PO7',  'PO8',  'O1',  'O2',
 	  
 	# Misc channels
-	  'A1',  'A2', 'ECG1', 'ECG2', 'TRIG',
+	  'A1',  'A2', 'ECG1', 'ECG2',
 	
 ]
 
@@ -45,7 +46,7 @@ BANANA_1020 = [
 	('Fp2', 'F4'), ('F4', 'C4'), ('C4', 'P4'), ('P4', 'O2'),
 	
 	# Misc channels
-	'A1', 'A2', 'ECG1', 'ECG2', 'TRIG',
+	'A1', 'A2', 'ECG1', 'ECG2',
 
 ]
 
@@ -59,7 +60,7 @@ TRANSVERSE_1020 = [
 	('T5',  'O1'), ( 'O1',  'O2'), ( 'O2', 'T6'),
 	
 	# Misc channels
-	'A1', 'A2', 'ECG1', 'ECG2', 'TRIG',
+	'A1', 'A2', 'ECG1', 'ECG2',
 
 ]
 
@@ -86,14 +87,15 @@ def make_argument_parser() -> ArgumentParser:
 	parser.add_argument('--eog', type=str, nargs='+', help='mark channels as EOG channels')
 	parser.add_argument('--stim', type=str, nargs='+', help='mark channels as STIM channels')
 	parser.add_argument('--bads', type=str, nargs='+', help='mark channels as bad channels')
-	parser.add_argument('-fl', '--filter-low', type=float, default=1, help='low frequency signal limit in Hz')
-	parser.add_argument('-fh', '--filter-high', type=float, default=70, help='high frequency signal limit in Hz')
-	parser.add_argument('-fn', '--filter-notch', default='europe', help='notch frequency signal limit in Hz')
+	parser.add_argument('-fl', '--filter-low', type=float, default=.3, help='low frequency filter in Hz')
+	parser.add_argument('-fh', '--filter-high', type=float, default=70, help='high frequency filter in Hz')
+	parser.add_argument('-fn', '--filter-notch', default='europe', help='notch frequency filter in Hz')
 	parser.add_argument('-i', '--ica', action='store_true', help='perform ICA decomposition')
 	pca_opts = parser.add_mutually_exclusive_group()
 	pca_opts.add_argument('--pca-count', type=int, help='number of PCA components to keep')
 	pca_opts.add_argument('--pca-variance', type=float, default=.95, help='keep as many PCA components as to explain given variance')
 	parser.add_argument('--ica-seed', type=int, help='seed for deterministic ICA results')
+	parser.add_argument('--ica-filter-low', type=float, default=1, help='low frequency filter before ICA analysis')
 	parser.add_argument('--ica-method', choices=ICA_METHODS, default=ICA_METHODS[0], help='ICA method to use')
 	parser.add_argument('--ica-exclude', nargs='*', help='ICA components to exclude from result')
 	parser.add_argument('--exclude-ecg', action='store_true', help='exclude ICA sources detected as ECG')
@@ -104,18 +106,11 @@ def make_argument_parser() -> ArgumentParser:
 	parser.add_argument('-o', '--output', help='save preprocessed EEG data to FIF file')
 	return parser
 
-def load_eeg_file(fname: str) -> Optional[Raw]:
-	fname = fname.lower()
-	if fname.endswith('.fif'):
-		return Raw(fname, preload=True)
+def load_file(fname: str) -> Optional[Raw]:
+	raw = read_raw(fname, preload=True)
 	if fname.endswith('.edf'):
-		return load_edf_file(fname)
-	return None
-
-def load_edf_file(fname: str) -> Raw:
-	raw = read_raw_edf(fname, stim_channel='TRIG', preload=True)
-	raw.rename_channels({'FP1': 'Fp1', 'FP2': 'Fp2',
-	                      'OD':  'A1',  'OI': 'A2'})
+		raw.rename_channels({'FP1': 'Fp1', 'FP2': 'Fp2',
+		                      'OD':  'A1',  'OI':  'A2'})
 	return raw
 
 def apply_signal_filters(raw: Raw, low_filter: float = 1, high_filter: float = 100, notch_filter: float =50) -> None:
@@ -126,13 +121,13 @@ def apply_signal_filters(raw: Raw, low_filter: float = 1, high_filter: float = 1
 def setup_montage_channels(raw: Raw, channels: List[Channel]) -> None:
 	included = [ch for ch in channels if isinstance(ch, str)]
 	ch_pairs = [ch for ch in channels if isinstance(ch, tuple)]
-	if len(ch_pairs) > 0:
+	if ch_pairs:
 		anodes, cathodes = [a for a, _ in ch_pairs], [c for _, c in ch_pairs]
 		mne.set_bipolar_reference(raw, anodes, cathodes, drop_refs=False, copy=False)
 		included = [f'{a}-{c}' for a, c in zip(anodes, cathodes)] + included
 	raw.pick_channels(included, ordered=True)
 
-def get_ica_components(raw: Raw, method: str = 'fastica', pca_components: float = None, seed: float = None) -> ICA:
+def perform_ica_analysis(raw: Raw, method: str = 'fastica', pca_components: float = None, seed: float = None) -> ICA:
 	ica = ICA(max_iter='auto', n_components=pca_components, random_state=seed)
 	ica.fit(raw, picks='data')
 	return ica
@@ -149,19 +144,23 @@ def parse_notch_filter_freqs(freq: Union[str, float]) -> Optional[float]:
 	
 	return None
 
+def is_ica_analysis_required(args: Mapping[str, any]) -> bool:
+	return args.ica         or \
+	       args.ica_exclude or \
+	       args.exclude_ecg or \
+	       args.exclude_eog
 
-def main() -> None:
+def main() -> Optional[int]:
 	parser = make_argument_parser()
 	if len(sys.argv) == 1:
 		parser.print_usage()
-		sys.exit(-1)
+		return -1
 	
 	args = parser.parse_args()
-	if args.quiet is True:
+	if args.quiet:
 		mne.set_log_level('warning')
 	
-	raw = load_eeg_file(args.input)
-	
+	raw = load_file(args.input)
 	montage = dict(MONTAGES).get(args.montage)
 	raw.set_montage(montage.system, on_missing='ignore')
 	if montage.ref is not None:
@@ -186,46 +185,49 @@ def main() -> None:
 	if args.bads is not None:
 		raw.info['bads'].extend(args.bads)
 	
-	filtered = raw.copy()
 	notch_freqs = parse_notch_filter_freqs(args.filter_notch)
-	apply_signal_filters(filtered, low_filter=args.filter_low,
-	                               high_filter=args.filter_high,
-	                               notch_filter=notch_freqs)
+	apply_signal_filters(raw, low_filter=args.filter_low,
+	                          high_filter=args.filter_high,
+	                          notch_filter=notch_freqs)
 	
-	if args.ica is True:
+	if is_ica_analysis_required(args):
+		filtered = raw.copy().pick('data')
+		filtered.filter(args.ica_filter_low, None)
 		pca_components = args.pca_count or args.pca_variance
-		ica = get_ica_components(filtered, method=args.ica_method,
-		                         pca_components=pca_components,
-		                         seed=args.ica_seed)
+		ica = perform_ica_analysis(filtered, method=args.ica_method,
+		                           pca_components=pca_components,
+		                           seed=args.ica_seed)
 		
-		if args.ica_exclude is not None:
+		if args.ica_exclude:
 			ica.exclude.extend(args.ica_exclude)
-		if args.exclude_ecg is True:
-			ecg_ids, _ = ica.find_bads_ecg(filtered)
+		if args.exclude_ecg:
+			ecg_ids, _ = ica.find_bads_ecg(raw)
 			ica.exclude.extend(ecg_ids)
-		if args.exclude_eog is True:
-			eog_ids, _ = ica.find_bads_eog(filtered)
+		if args.exclude_eog:
+			eog_ids, _ = ica.find_bads_eog(raw)
 			ica.exclude.extend(eog_ids)
 		
-		if args.ica_exclude is None or args.show_components is True:
-			ica.plot_sources(inst=filtered, block=False)
-		if args.show_sources is True:
-			ica.plot_components(inst=filtered)
+		if args.show_sources:
+			ica.plot_components(inst=filtered, show=False)
+			plt.show(block=False)
 		
-		ica.apply(filtered)
-		plt.show()
+		if not args.exclude or args.show_components:
+			ica.plot_sources(inst=filtered, block=True)
+		
+		ica.apply(raw)
 	
 	if args.show:
-		filtered.plot(block=True)
-		plt.show()
+		raw.plot(block=True)
 	
-	if args.output is not None:
-		filtered.save(args.output, overwrite=True)
+	if args.output:
+		raw.save(args.output, overwrite=True)
 
 
 if __name__ == '__main__':
 	try:
-		main()
+		res = main()
+		sys.exit(res)
+	
 	except KeyboardInterrupt:
 		print('Interrupted.', file=sys.stderr)
 		sys.exit(-1)
