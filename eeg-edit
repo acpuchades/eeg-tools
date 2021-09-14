@@ -26,12 +26,8 @@ MONTAGES = {
 	],
 }
 
-REF_METHODS = [
-	'average', 'ears'
-]
-
 def parse_optional(t: Callable[[str], any]):
-	return lambda x: None if x.lower() == 'none' else t(x)
+	return lambda x: None if x == 'none' else t(x)
 
 def parse_with_mapping(t: Callable[[str], any], mapping: Mapping[str, any]):
 	return lambda x: mapping.get(x) or t(x)
@@ -42,32 +38,41 @@ def make_argument_parser() -> ArgumentParser:
 	parser = ArgumentParser(description='EEG signal data preprocessing tool')
 	parser.add_argument('input', help='input EDF file to process')
 	parser.add_argument('-q', '--quiet', action='store_true', help='do not show messages')
-	parser.add_argument('-m', '--montage', choices=MONTAGE_NAMES, default=MONTAGE_NAMES[0], help='apply selected montage')
-	parser.add_argument('-r', '--reference', nargs='+', default='average', help='reference channels to use'),
-	parser.add_argument('-e', '--exclude', type=str, nargs='+', help='exclude selected channels')
-	parser.add_argument('-c', '--channels', type=str, nargs='+', help='include selected channels')
-	parser.add_argument('--ecg', type=str, nargs='+', help='mark channels as ECG channels')
-	parser.add_argument('--eog', type=str, nargs='+', help='mark channels as EOG channels')
-	parser.add_argument('--stim', type=str, nargs='+', help='mark channels as STIM channels')
-	parser.add_argument('--bads', type=str, nargs='+', help='mark channels as bad channels')
-	parser.add_argument('-fl', '--filter-low', type=parse_optional(float), default=.3, help='low frequency filter in Hz')
-	parser.add_argument('-fh', '--filter-high', type=parse_optional(float), default=70, help='high frequency filter in Hz')
-	parser.add_argument('-fn', '--filter-notch', type=parse_notch_filter, default='europe', help='notch frequency filter in Hz')
+	parser.add_argument('-o', '--output', metavar='PATH', help='save preprocessed EEG data to FIF file')
 	parser.add_argument('-i', '--ica', action='store_true', help='perform ICA decomposition')
-	pca_opts = parser.add_mutually_exclusive_group()
-	pca_opts.add_argument('--pca-count', type=int, help='number of PCA components to keep')
-	pca_opts.add_argument('--pca-variance', type=float, help='keep as many PCA components as to explain given variance')
-	parser.add_argument('--ica-seed', type=int, help='seed for deterministic ICA results')
-	parser.add_argument('--ica-filter-low', type=float, default=1, help='low frequency filter before ICA analysis')
-	parser.add_argument('--ica-method', choices=ICA_METHODS, default=ICA_METHODS[0], help='ICA method to use')
-	parser.add_argument('--ica-exclude', nargs='*', help='ICA components to exclude from result')
-	parser.add_argument('--exclude-ecg', action='store_true', help='exclude ICA sources detected as ECG')
-	parser.add_argument('--exclude-eog', action='store_true', help='exclude ICA sources detected as EOG')
-	parser.add_argument('--show-pca-variance', action='store_true', help='show cumulative PCA variance')
-	parser.add_argument('--show-components', action='store_true', help='show ICA sources')
-	parser.add_argument('--show-sources', action='store_true', help='show ICA components')
 	parser.add_argument('--show', action='store_true', help='show result EEG data')
-	parser.add_argument('-o', '--output', help='save preprocessed EEG data to FIF file')
+	
+	# Montage options
+	montage_opts = parser.add_argument_group('montage options')
+	montage_opts.add_argument('-m', '--montage', choices=MONTAGE_NAMES, default=MONTAGE_NAMES[0], help='apply selected montage')
+	montage_opts.add_argument('-c', '--channels', metavar='CHANNEL', nargs='+', help='include selected channels')
+	montage_opts.add_argument('-e', '--exclude', metavar='CHANNEL', nargs='+', help='exclude selected channels')
+	montage_opts.add_argument('-r', '--reference', metavar='CHANNEL', nargs='+', default='average', help='reference channels to use')
+	montage_opts.add_argument('--ecg', metavar='CHANNEL', nargs='+', help='mark channels as ECG channels')
+	montage_opts.add_argument('--eog', metavar='CHANNEL', nargs='+', help='mark channels as EOG channels')
+	montage_opts.add_argument('--stim', metavar='CHANNEL', nargs='+', help='mark channels as STIM channels')
+	montage_opts.add_argument('--bads', metavar='CHANNEL', nargs='+', help='mark channels as bad channels')
+	
+	# Filter options
+	filter_opts = parser.add_argument_group('filter options')
+	filter_opts.add_argument('-fl', '--filter-low', metavar='FREQ', type=parse_optional(float), default=.3, help='low frequency filter in Hz')
+	filter_opts.add_argument('-fh', '--filter-high', metavar='FREQ', type=parse_optional(float), default=70, help='high frequency filter in Hz')
+	filter_opts.add_argument('-fn', '--filter-notch', metavar='FREQ', type=parse_notch_filter, default=50, help='notch frequency filter in Hz')
+	
+	# ICA options
+	ica_opts = parser.add_argument_group('ICA options')
+	pca_opts = ica_opts.add_mutually_exclusive_group()
+	pca_opts.add_argument('--pca-count', metavar='COUNT', type=int, help='number of PCA components to keep')
+	pca_opts.add_argument('--pca-variance', metavar='PERCENTAGE', type=float, help='keep as many PCA components as to explain given variance')
+	ica_opts.add_argument('--ica-seed', metavar='SEED', type=int, help='seed for deterministic ICA results')
+	ica_opts.add_argument('--ica-filter-low', metavar='FREQ', type=float, default=1, help='low frequency filter before ICA analysis')
+	ica_opts.add_argument('--ica-method', choices=ICA_METHODS, default=ICA_METHODS[0], help='ICA method to use')
+	ica_opts.add_argument('--ica-exclude', metavar='INDEX', type=int, nargs='*', help='ICA components to exclude from result')
+	ica_opts.add_argument('--exclude-ecg', action='store_true', help='exclude ICA sources detected as ECG')
+	ica_opts.add_argument('--exclude-eog', action='store_true', help='exclude ICA sources detected as EOG')
+	ica_opts.add_argument('--show-pca-variance', action='store_true', help='show cumulative PCA variance')
+	ica_opts.add_argument('--show-components', action='store_true', help='show ICA sources')
+	ica_opts.add_argument('--show-sources', action='store_true', help='show ICA components')
 	return parser
 
 def load_file(fname: str) -> Optional[Raw]:
@@ -91,6 +96,17 @@ def is_ica_analysis_required(args: Mapping[str, any]) -> bool:
 	       args.ica_exclude or \
 	       args.exclude_ecg or \
 	       args.exclude_eog
+
+def plot_pca_cumulative_variance(ica: ICA, show: bool = True, block: bool = False) -> plt.Figure:
+	pca_total_variance = sum(ica.pca_explained_variance_)
+	x = np.arange(1, len(ica.pca_explained_variance_) + 1)
+	y = np.cumsum(ica.pca_explained_variance_) / pca_total_variance
+	plt.xlabel('number of components')
+	plt.ylabel('cumulative explained variance')
+	plt.plot(x, y)
+	
+	if show:
+		plt.show(block=block)
 
 def main() -> Optional[int]:
 	parser = make_argument_parser()
@@ -146,13 +162,7 @@ def main() -> Optional[int]:
 		                           seed=args.ica_seed)
 
 		if args.show_pca_variance:
-			pca_total_variance = sum(ica.pca_explained_variance_)
-			x = np.arange(1, len(ica.pca_explained_variance_) + 1)
-			y = np.cumsum(ica.pca_explained_variance_) / pca_total_variance
-			plt.xlabel('number of components')
-			plt.ylabel('cumulative explained variance')
-			plt.plot(x, y)
-			plt.show()
+			plot_pca_cumulative_variance(ica, block=True)
 		
 		if args.ica_exclude:
 			ica.exclude.extend(args.ica_exclude)
