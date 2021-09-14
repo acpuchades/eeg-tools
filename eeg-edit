@@ -68,8 +68,8 @@ def make_argument_parser() -> ArgumentParser:
 	ica_opts.add_argument('--ica-filter-low', metavar='FREQ', type=float, default=1, help='low frequency filter before ICA analysis')
 	ica_opts.add_argument('--ica-method', choices=ICA_METHODS, default=ICA_METHODS[0], help='ICA method to use')
 	ica_opts.add_argument('--ica-exclude', metavar='INDEX', type=int, nargs='*', help='ICA components to exclude from result')
-	ica_opts.add_argument('--exclude-ecg', action='store_true', help='exclude ICA sources detected as ECG')
-	ica_opts.add_argument('--exclude-eog', action='store_true', help='exclude ICA sources detected as EOG')
+	ica_opts.add_argument('--ica-exclude-ecg', action='store_true', help='exclude ICA sources detected as ECG')
+	ica_opts.add_argument('--ica-exclude-eog', action='store_true', help='exclude ICA sources detected as EOG')
 	ica_opts.add_argument('--show-pca-variance', action='store_true', help='show cumulative PCA variance')
 	ica_opts.add_argument('--show-components', action='store_true', help='show ICA sources')
 	ica_opts.add_argument('--show-sources', action='store_true', help='show ICA components')
@@ -92,10 +92,10 @@ def perform_ica_analysis(raw: Raw, method: str = 'fastica', pca_components: floa
 	return ica.fit(raw)
 
 def is_ica_analysis_required(args: Mapping[str, any]) -> bool:
-	return args.ica         or \
-	       args.ica_exclude or \
-	       args.exclude_ecg or \
-	       args.exclude_eog
+	return args.ica             or \
+	       args.ica_exclude     or \
+	       args.ica_exclude_ecg or \
+	       args.ica_exclude_eog
 
 def plot_pca_cumulative_variance(ica: ICA, show: bool = True, block: bool = False) -> plt.Figure:
 	pca_total_variance = sum(ica.pca_explained_variance_)
