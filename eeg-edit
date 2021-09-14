@@ -14,6 +14,10 @@ ICA_METHODS = [
 	'fastica', 'infomax', 'picard',
 ]
 
+DATA_TYPES = [
+	'eeg', 'meg', 'ieeg',
+]
+
 MONTAGES = {
 	'standard_1020': [
 		 'Fp1', 'Fp2',   'F9',   'F7',  'F3',  'Fz',
@@ -35,11 +39,13 @@ def parse_with_mapping(t: Callable[[str], any], mapping: Mapping[str, any]):
 def make_argument_parser() -> ArgumentParser:
 	MONTAGE_NAMES = [k for k in MONTAGES.keys()]
 	parse_notch_filter = parse_optional(parse_with_mapping(float, {'europe': 50, 'usa': 60}))
-	parser = ArgumentParser(description='EEG signal data preprocessing tool')
-	parser.add_argument('input', help='input EDF file to process')
+	parser = ArgumentParser(description='M/EEG signal data preprocessing tool')
+	parser.add_argument('input', help='input file to analyze')
 	parser.add_argument('-q', '--quiet', action='store_true', help='do not show messages')
-	parser.add_argument('-o', '--output', metavar='PATH', help='save preprocessed EEG data to FIF file')
+	parser.add_argument('-t', '--type', choices=DATA_TYPES, default=DATA_TYPES[0], help='type of analized data')
 	parser.add_argument('-i', '--ica', action='store_true', help='perform ICA decomposition')
+	parser.add_argument('-z', '--gzip', action='store_true', help='use gzip to compress output data')
+	parser.add_argument('-o', '--output', metavar='NAME', help='name to use as template for output files')
 	parser.add_argument('--show', action='store_true', help='show result EEG data')
 	
 	# Montage options
@@ -111,7 +117,7 @@ def plot_pca_cumulative_variance(ica: ICA, show: bool = True, block: bool = Fals
 def main() -> Optional[int]:
 	parser = make_argument_parser()
 	if len(sys.argv) == 1:
-		parser.print_usage()
+		parser.print_usage(file=sys.stderr)
 		return -1
 	
 	args = parser.parse_args()
@@ -186,16 +192,16 @@ def main() -> Optional[int]:
 		raw.plot(block=True)
 	
 	if args.output:
-		if args.output.lower().endswith('.fif'):
-			raw.save(args.output, overwrite=True)
-		else:
-			raw.export(args.output)
+		output_fname = f'{args.output}_{args.type}.fif'
+		if args.gzip:
+			output_fname += '.gz'
+		raw.save(output_fname, overwrite=True)
 
 
 if __name__ == '__main__':
 	try:
-		ret = main()
-		sys.exit(ret)
+		res = main()
+		sys.exit(res)
 	
 	except KeyboardInterrupt:
 		print('Interrupted.', file=sys.stderr)
