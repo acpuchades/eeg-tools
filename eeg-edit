@@ -129,7 +129,7 @@ def main() -> Optional[int]:
 	raw.set_montage(args.montage, on_missing='warn')
 
 	fnotch_freqs = None
-	if isinstance(args.filter_notch, float):
+	if args.filter_notch:
 		freq = args.filter_notch
 		fnotch_freqs = np.arange(freq, 5 * freq + 1, freq)
 	
