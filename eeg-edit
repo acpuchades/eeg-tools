@@ -45,7 +45,7 @@ def make_argument_parser() -> ArgumentParser:
 	parser.add_argument('-t', '--type', choices=DATA_TYPES, default=DATA_TYPES[0], help='type of analized data')
 	parser.add_argument('-i', '--ica', action='store_true', help='perform ICA decomposition')
 	parser.add_argument('-z', '--gzip', action='store_true', help='use gzip to compress output data')
-	parser.add_argument('-o', '--output', metavar='NAME', help='name to use as template for output files')
+	parser.add_argument('-o', '--output', metavar='NAME', help='used as template for output files')
 	parser.add_argument('--show', action='store_true', help='show result EEG data')
 	
 	# Montage options
@@ -88,12 +88,12 @@ def load_file(fname: str) -> Optional[Raw]:
 		                      'OD':  'A1',  'OI':  'A2'})
 	return raw
 
-def apply_signal_filters(raw: Raw, low_filter: float = 1, high_filter: float = 100, notch_filter: float =50) -> None:
+def apply_signal_filters(raw: Raw, low_filter: float = None, high_filter: float = None, notch_filter: float = None) -> None:
 	filtered = raw.filter(l_freq=low_filter, h_freq=high_filter, picks='data')
 	if notch_filter is not None:
 		filtered.notch_filter(notch_filter, picks='data')
 
-def perform_ica_analysis(raw: Raw, method: str = 'fastica', pca_components: float = None, seed: float = None) -> ICA:
+def perform_ica_analysis(raw: Raw, method: str, pca_components: float = None, seed: float = None) -> ICA:
 	ica = ICA(max_iter='auto', n_components=pca_components, random_state=seed)
 	return ica.fit(raw)
 
@@ -113,6 +113,15 @@ def plot_pca_cumulative_variance(ica: ICA, show: bool = True, block: bool = Fals
 	
 	if show:
 		plt.show(block=block)
+
+def make_output_filename(name, type=None, compress=False) -> str:
+	fname = name
+	if type:
+		fname += f'_{type}'
+	fname += '.fif'
+	if compress:
+		fname += '.gz'
+	return fname
 
 def main() -> Optional[int]:
 	parser = make_argument_parser()
@@ -192,10 +201,8 @@ def main() -> Optional[int]:
 		raw.plot(block=True)
 	
 	if args.output:
-		output_fname = f'{args.output}_{args.type}.fif'
-		if args.gzip:
-			output_fname += '.gz'
-		raw.save(output_fname, overwrite=True)
+		out_file = make_output_filename(args.output, args.type, compress=args.gzip)
+		raw.save(out_file, overwrite=True)
 
 
 if __name__ == '__main__':
