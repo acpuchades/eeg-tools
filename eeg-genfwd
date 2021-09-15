@@ -1,0 +1,112 @@
+#!/usr/bin/python3
+
+import os
+import sys
+from typing import *
+from argparse import ArgumentParser
+
+import mne
+
+BEM_METHODS = [
+	'watershed', 'flash'
+]
+
+SRCSPACE_TYPES = [
+	'surface', 'volume'
+]
+
+def make_argument_parser() -> ArgumentParser:
+	SUBJECTS_DIR = os.getenv('SUBJECTS_DIR')
+	parser = ArgumentParser(description='Generate forward solution to use with DSL')
+	parser.add_argument('input', help='input file to compute forward solution for')
+	parser.add_argument('-q', '--quiet', action='store_true', help='do not show messages')
+	parser.add_argument('-s', '--subject', metavar='ID', required=True, help='FreeSurfer subject ID')
+	parser.add_argument('-d', '--subjects-dir', metavar='DIR', default=SUBJECTS_DIR, help='FreeSurfer subjects folder path')
+	
+	parser.add_argument('-b', '--bem-method', choices=BEM_METHODS, help='method to use for generating BEM surfaces')
+	parser.add_argument('--bem-file', metavar='PATH', help='BEM solution file to use in forward solution')
+	
+	source_opts = parser.add_mutually_exclusive_group()
+	source_opts.add_argument('-j', '--ss-type', choices=SRCSPACE_TYPES, help='type o source space to generate')
+	source_opts.add_argument('--ss-file', metavar='PATH', help='source space file to use in forward solution')
+	
+	parser.add_argument('-t', '--transform-file', metavar='PATH', help='path to transformation FIF file')
+	
+	parser.add_argument('-z', '--gzip', action='store_true', help='use gzip to compress output data')
+	parser.add_argument('-o', '--output', metavar='NAME', required=True, help='used as template for output files')
+	return parser
+
+def make_output_filename(name, type=None, compress=False) -> str:
+	fname = name
+	if type:
+		fname += f'_{type}'
+	fname += '.fif'
+	if compress:
+		fname += '.gz'
+	return fname
+
+def main() -> Optional[int]:
+	parser = make_argument_parser()
+	if len(sys.argv) == 1:
+		parser.print_usage(file=sys.stderr)
+		return -1
+	
+	args = parser.parse_args()
+	if args.quiet:
+		mne.set_log_level('warning')
+	
+	raw = mne.io.read_raw(args.input)
+	
+	bem = None
+	if args.bem_file:
+		bem = mne.read_bem_solution(args.bem_file)
+	else:
+		bem_folder = os.path.join(args.subjects_dir, args.subject, 'bem', args.bem_method)
+		bem_file = os.path.join(bem_folder, 'ws.mgz')
+		if not os.path.exists(bem_file):
+			if args.bem_method == 'watershed':
+				mne.bem.make_watershed_bem(args.subject, subjects_dir=args.subjects_dir)
+			elif args.bem_method == 'flash':
+				mne.bem.make_flash_bem(args.subject, subjects_dir=args.subjects_dir)
+
+		conductivity = (0.3, 0.006, 0.3)
+		bem_model = mne.make_bem_model(subject=args.subject, ico=4,
+									conductivity=conductivity,
+									subjects_dir=args.subjects_dir)
+		bem = mne.make_bem_solution(bem_model)
+		
+		bem_file = make_output_filename(args.output, 'bem', compress=args.gzip)
+		if not os.path.exists(bem_file):
+			mne.write_bem_solution(bem_file, bem)
+	
+	src_space = None
+	if args.ss_file:
+		src_space = mne.read_source_spaces(args.ss_file)
+	else:
+		if args.ss_type == 'surface':
+			src_space = mne.setup_source_space(args.subject, subjects_dir=args.subjects_dir, spacing='oct4')
+		elif args.ss_type == 'volume':
+			sphere = (0.0, 0.0, 0.04, 0.09)
+			src_space = mne.setup_volume_source_space(args.subject, subjects_dir=args.subjects_dir,
+			                                          sphere=sphere, sphere_units='m', spacing='oct4')
+		ss_file = make_output_filename(args.output, 'src', compress=args.gzip)
+		if not os.path.exists(ss_file):
+			mne.write_source_spaces(ss_file, src_space)
+	
+	fwd = mne.make_forward_solution(raw.info, args.transform_file, src_space, bem)
+	output_file = make_output_filename(args.output, 'fwd', compress=args.gzip)
+	mne.write_forward_solution(output_file, fwd, overwrite=True)
+
+
+if __name__ == '__main__':
+	try:
+		res = main()
+		sys.exit(res)
+	
+	except InterruptedError:
+		print('Interrupted.', file=sys.stderr)
+		sys.exit(-1)
+		
+	except Exception as e:
+		print(f'Error: {e}.', file=sys.stderr)
+		sys.exit(-1)
