@@ -156,7 +156,8 @@ def main() -> Optional[int]:
 	if args.exclude:
 		raw.drop_channels(args.exclude)
 	
-	raw.set_eeg_reference(args.reference)
+	projection = args.montage == 'average'
+	raw.set_eeg_reference(args.reference, projection)
 	raw.set_montage(args.montage, on_missing='warn')
 
 	fnotch_freqs = None
