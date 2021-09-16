@@ -40,7 +40,7 @@ def make_argument_parser() -> ArgumentParser:
 	MONTAGE_NAMES = [k for k in MONTAGES.keys()]
 	parse_notch_filter = parse_optional(parse_with_mapping(float, {'europe': 50, 'usa': 60}))
 	parser = ArgumentParser(description='M/EEG signal data preprocessing tool')
-	parser.add_argument('input', help='input file to analyze')
+	parser.add_argument('input', metavar='INPUT', help='input file to analyze')
 	parser.add_argument('-q', '--quiet', action='store_true', help='do not show messages')
 	parser.add_argument('-t', '--type', choices=DATA_TYPES, default=DATA_TYPES[0], help='type of analized data')
 	parser.add_argument('-i', '--ica', action='store_true', help='perform ICA decomposition')
@@ -83,9 +83,8 @@ def make_argument_parser() -> ArgumentParser:
 
 def load_file(fname: str) -> Optional[Raw]:
 	raw = read_raw(fname, preload=True)
-	if fname.endswith('.edf'):
-		raw.rename_channels({'FP1': 'Fp1', 'FP2': 'Fp2',
-		                      'OD':  'A1',  'OI':  'A2'})
+	raw.rename_channels({'FP1': 'Fp1', 'FP2': 'Fp2',
+	                      'OD':  'A1',  'OI':  'A2'})
 	return raw
 
 def apply_signal_filters(raw: Raw, low_filter: float = None, high_filter: float = None, notch_filter: float = None) -> None:
@@ -117,7 +116,7 @@ def plot_pca_cumulative_variance(ica: ICA, show: bool = True, block: bool = Fals
 def make_output_filename(name, type=None, compress=False) -> str:
 	fname = name
 	if type:
-		fname += f'_{type}'
+		fname += f'-{type}'
 	fname += '.fif'
 	if compress:
 		fname += '.gz'

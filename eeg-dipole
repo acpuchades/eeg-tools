@@ -1,0 +1,70 @@
+#!/usr/bin/python3
+
+import sys
+from typing import *
+from argparse import ArgumentParser
+
+import mne
+from mne.minimum_norm import make_inverse_operator, apply_inverse
+
+DSL_METHODS = [
+	'dSPM', 'MNE', 'sLORETA', 'eLORETA',
+]
+
+def make_argument_parser() -> ArgumentParser:
+	parser = ArgumentParser(description='Dipole Source Localization tool for M/EEG recordings')
+	parser.add_argument('input', metavar='INPUT', help='input file with events to attempt to locate')
+	parser.add_argument('-q', '--quiet', action='store_true', help='do not show messages')
+	parser.add_argument('-f', '--fwd-file', metavar='FWD_FILE', required=True, help='path to forward solution file')
+	parser.add_argument('-m', '--method', choices=DSL_METHODS, default=DSL_METHODS[0], help='method to compute inverse solution')
+	
+	event_opts = parser.add_mutually_exclusive_group()
+	event_opts.add_argument('-s', '--stim', metavar='CHANNEL', help='use signals from trigger channel as events')
+	event_opts.add_argument('-a', '--annotated', metavar='REGEXP', help='use annotations matching REGEXP to mark events')
+	
+	parser.add_argument('-t0', dest='time_start', type=float, default=-0.2, help='offset from event used as epoch start in seconds (usually negative)')
+	parser.add_argument('-tn', dest='time_end', type=float, default=.5, help='offset from event used as epoch end in seconds')
+	return parser
+
+def main() -> Optional[int]:
+	parser = make_argument_parser()
+	if len(sys.argv) == 1:
+		parser.print_usage(sys.stderr)
+		parser.exit(-1)
+	
+	args = parser.parse_args()
+	raw = mne.io.read_raw(args.input, preload=True)
+	fwd = mne.read_forward_solution(args.fwd_file)
+	
+	if args.stim:
+		events = mne.find_events(raw, stim_channel=args.stim)
+		event_ids = None
+	elif args.annotated:
+		events, event_ids = mne.events_from_annotations(raw, regexp=args.annotations)
+	
+	epochs = mne.Epochs(raw, events, event_ids, tmin=args.time_start,
+	                    tmax=args.time_end, picks='data')
+	
+	evoked = epochs.average().pick('data')
+	inv_op = make_inverse_operator(evoked.info, fwd, noise_cov=None)
+	
+	snr = 3.
+	lambda2 = 1. / snr ** 2
+	stc, resid = apply_inverse(evoked, inv_op, lambda2, method=args.method,
+	                           pick_ori=None, return_residual=True)
+	
+	pass
+
+if __name__ == '__main__':
+	try:
+		res = main()
+		sys.exit(res)
+	
+	except KeyboardInterrupt:
+		print('Interrupted.', file=sys.stderr)
+		sys.exit(-1)
+	
+	except Exception as e:
+		print(f'Error: {e}.', file=sys.stderr)
+		sys.exit(-1)
+
