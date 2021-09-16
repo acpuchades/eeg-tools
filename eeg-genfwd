@@ -27,10 +27,10 @@ def make_argument_parser() -> ArgumentParser:
 	parser.add_argument('-s', '--subject', metavar='ID', required=True, help='FreeSurfer subject ID')
 	parser.add_argument('-d', '--subjects-dir', metavar='DIR', help='FreeSurfer subjects folder path')
 	parser.add_argument('-b', '--bem-method', choices=BEM_METHODS, help='method to use for generating BEM surfaces')
-	parser.add_argument('--bem-regenerate', action='store_true', help='regenerate BEM surfaces')
 	parser.add_argument('-j', '--source-type', choices=SOURCE_TYPES, help='type of source space to generate')
 	parser.add_argument('--source-spacing', choices=SOURCE_SPACING, default=SOURCE_SPACING[0], help='spacing for source spaces')
 	parser.add_argument('-t', '--transform', metavar='PATH', default='fsaverage', help='path to transformation FIF file')
+	parser.add_argument('-r', '--regenerate', action='store_true', help='recreate intermediate files')
 	parser.add_argument('-z', '--gzip', action='store_true', help='use gzip to compress output data')
 	parser.add_argument('-o', '--output', metavar='NAME', required=True, help='used as template for output files')
 	return parser
@@ -78,26 +78,36 @@ def main() -> Optional[int]:
 	
 	raw = mne.io.read_raw(args.input)
 	
-	try:
-		bem_file = make_output_filename(args.output, 'bem', compress=args.gzip)
-		bem = mne.read_bem_solution(bem_file)
-	except:
+	bem = None
+	bem_file = make_output_filename(args.output, 'bem', compress=args.gzip)
+	if not args.regenerate:
+		try:
+			bem = mne.read_bem_solution(bem_file)
+		except Exception:
+			pass
+	
+	if not bem:
 		ws_dir = os.path.join(subjects_dir, args.subject, 'bem', args.bem_method)
-		if not os.path.exists(ws_dir) or args.bem_regenerate:
+		if not os.path.exists(ws_dir) or args.regenerate:
 			generate_bem_surfaces(args.subject, args.bem_method, overwrite=True)
 		bem = generate_bem_solution(args.subject)
-		mne.write_bem_solution(bem_file, bem)
+		mne.write_bem_solution(bem_file, bem, overwrite=True)
 	
-	try:
-		src_file = make_output_filename(args.output, 'src', compress=args.gzip)
-		src_space = mne.read_source_spaces(src_file)
-	except:
+	src_space = None
+	src_file = make_output_filename(args.output, 'src', compress=args.gzip)
+	if not args.regenerate:
+		try:
+			src_space = mne.read_source_spaces(src_file)
+		except:
+			pass
+	
+	if not src_space:
 		if args.source_type == 'surface':
 			src_space = generate_source_space(args.subject, 'surface',
 			                                  spacing=args.source_spacing)
 		if args.source_type == 'volume':
 			src_space = generate_source_space(args.subject, 'volume')
-		mne.write_source_spaces(src_file, src_space)
+		mne.write_source_spaces(src_file, src_space, overwrite=True)
 	
 	fwd = mne.make_forward_solution(raw.info, args.transform, src_space, bem)
 	output_file = make_output_filename(args.output, 'fwd', compress=args.gzip)
