@@ -72,8 +72,8 @@ def make_argument_parser() -> ArgumentParser:
 	ica_opts.add_argument('--ica-exclude', metavar='INDEX', type=int, nargs='*', help='ICA components to exclude from result')
 	ica_opts.add_argument('--ica-exclude-ecg', action='store_true', help='exclude ICA sources detected as ECG')
 	ica_opts.add_argument('--ica-exclude-eog', action='store_true', help='exclude ICA sources detected as EOG')
-	ica_opts.add_argument('--show-pca-variance', action='store_true', help='show cumulative PCA variance')
-	ica_opts.add_argument('--show-components', action='store_true', help='show ICA sources')
+	ica_opts.add_argument('--ica-show-pca-variance', action='store_true', help='show cumulative PCA variance')
+	ica_opts.add_argument('--ica-show-components', action='store_true', help='show ICA sources')
 	ica_opts.add_argument('--show-sources', action='store_true', help='show ICA components')
 	return parser
 
@@ -170,23 +170,23 @@ def main() -> Optional[int]:
 		                           pca_components=pca_components,
 		                           seed=args.ica_seed)
 
-		if args.show_pca_variance:
+		if args.ica_show_pca_variance:
 			plot_pca_cumulative_variance(ica, block=True)
 		
 		if args.ica_exclude:
 			ica.exclude.extend(args.ica_exclude)
-		if args.exclude_ecg:
+		if args.ica_exclude_ecg:
 			ecg_ids, _ = ica.find_bads_ecg(raw)
 			ica.exclude.extend(ecg_ids)
-		if args.exclude_eog:
+		if args.ica_exclude_eog:
 			eog_ids, _ = ica.find_bads_eog(raw)
 			ica.exclude.extend(eog_ids)
 		
-		if args.show_sources:
+		if args.ica_show_sources:
 			ica.plot_components(inst=filtered, show=False)
 			plt.show(block=False)
 		
-		if args.ica or args.show_components:
+		if args.ica or args.ica_show_components:
 			ica.plot_sources(inst=filtered, block=True)
 		
 		ica.apply(raw, n_pca_components=pca_components)
