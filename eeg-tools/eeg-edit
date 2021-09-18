@@ -149,7 +149,7 @@ def main() -> Optional[int]:
 	if args.exclude:
 		raw.drop_channels(args.exclude)
 	
-	projection = args.montage == 'average'
+	projection = args.reference == 'average'
 	raw.set_eeg_reference(args.reference, projection)
 	raw.set_montage(args.montage, on_missing='warn')
 
