@@ -72,7 +72,8 @@ def main() -> Optional[int]:
 	raw = mne.io.read_raw(args.input)
 	
 	bem = None
-	bem_file = make_output_filename(args.output, 'bem', compress=args.gzip)
+	bem_method = args.bem_method
+	bem_file = make_output_filename(args.output, f'{bem_method}_bem', compress=args.gzip)
 	if not args.regenerate:
 		try:
 			bem = mne.read_bem_solution(bem_file)
@@ -87,7 +88,8 @@ def main() -> Optional[int]:
 		mne.write_bem_solution(bem_file, bem, overwrite=True)
 	
 	src_space = None
-	src_file = make_output_filename(args.output, 'src', compress=args.gzip)
+	src_type = args.source_type
+	src_file = make_output_filename(args.output, f'{src_type}_src', compress=args.gzip)
 	if not args.regenerate:
 		try:
 			src_space = mne.read_source_spaces(src_file)
