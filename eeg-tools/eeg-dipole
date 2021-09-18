@@ -13,12 +13,17 @@ DSL_METHODS = [
 	'dSPM', 'MNE', 'sLORETA', 'eLORETA',
 ]
 
+INPUT_TYPES = [
+	'raw', 'events', 'evoked'
+]
+
 def make_argument_parser() -> ArgumentParser:
-	parser = ArgumentParser(description='Dipole Source Localization tool for M/EEG recordings')
+	parser = ArgumentParser(description='Dipole source localization tool for M/EEG recordings')
 	parser.add_argument('input', metavar='INPUT', help='input file with events to attempt to locate')
+	parser.add_argument('-t', '--type', help='input file type', **use_first_as_default(INPUT_TYPES))
 	parser.add_argument('-q', '--quiet', action='store_true', help='do not show messages')
 	parser.add_argument('-f', '--fwd-file', metavar='FWD_FILE', required=True, help='path to forward solution file')
-	parser.add_argument('-m', '--method', choices=DSL_METHODS, default=DSL_METHODS[0], help='method to compute inverse solution')
+	parser.add_argument('-m', '--method', help='method to compute inverse solution', **use_first_as_default(DSL_METHODS))
 	
 	event_opts = parser.add_mutually_exclusive_group()
 	event_opts.add_argument('-s', '--stim', metavar='CHANNEL', help='use signals from trigger channel as events')
@@ -36,7 +41,6 @@ def main() -> Optional[int]:
 	
 	args = parser.parse_args()
 	raw = mne.io.read_raw(args.input, preload=True)
-	fwd = mne.read_forward_solution(args.fwd_file)
 	
 	if args.stim:
 		events = mne.find_events(raw, stim_channel=args.stim)
@@ -46,6 +50,8 @@ def main() -> Optional[int]:
 	
 	epochs = mne.Epochs(raw, events, event_ids, tmin=args.time_start,
 	                    tmax=args.time_end, picks='data')
+	
+	fwd = mne.read_forward_solution(args.fwd_file)
 	
 	evoked = epochs.average().pick('data')
 	inv_op = make_inverse_operator(evoked.info, fwd, noise_cov=None)

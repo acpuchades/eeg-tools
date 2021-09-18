@@ -1,5 +1,7 @@
 from typing import *
 
+def use_first_as_default(choices: List[str]) -> dict:
+	return {'choices': choices, 'default': choices[0]}
 
 def make_output_filename(name: str, type: str = None, compress: bool = False) -> str:
 	fname = name
