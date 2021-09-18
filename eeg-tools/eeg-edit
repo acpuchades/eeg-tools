@@ -35,13 +35,15 @@ MONTAGES = {
 def make_argument_parser() -> ArgumentParser:
 	MONTAGE_NAMES = [k for k in MONTAGES.keys()]
 	parse_notch_filter = parse_optional(parse_with_mapping(float, {'europe': 50, 'usa': 60}))
+	
 	parser = ArgumentParser(description='M/EEG signal data preprocessing tool')
 	parser.add_argument('input', metavar='INPUT', help='input file to analyze')
 	parser.add_argument('-q', '--quiet', action='store_true', help='do not show messages')
 	parser.add_argument('-t', '--type', help='type of analized data', **use_first_as_default(DATA_TYPES))
 	parser.add_argument('-i', '--ica', action='store_true', help='perform ICA decomposition')
-	parser.add_argument('-z', '--gzip', action='store_true', help='use gzip to compress output data')
-	parser.add_argument('-o', '--output', metavar='NAME', help='used as template for output files')
+
+	add_output_options(parser)
+	
 	parser.add_argument('--show', action='store_true', help='show result EEG data')
 	
 	# Montage options
@@ -123,9 +125,7 @@ def main() -> Optional[int]:
 		return -1
 	
 	args = parser.parse_args()
-	
-	if args.quiet:
-		mne.set_log_level('warning')
+	process_global_options(args)
 	
 	raw = load_file(args.input)
 	channels = MONTAGES.get(args.montage)
@@ -153,10 +153,11 @@ def main() -> Optional[int]:
 	raw.set_eeg_reference(args.reference, projection)
 	raw.set_montage(args.montage, on_missing='warn')
 
-	fnotch_freqs = None
 	if args.filter_notch:
 		freq = args.filter_notch
 		fnotch_freqs = np.arange(freq, 5 * freq + 1, freq)
+	else:
+		fnotch_freqs = None
 	
 	apply_signal_filters(raw, low_filter=args.filter_low,
 	                          high_filter=args.filter_high,

@@ -27,16 +27,17 @@ INPUT_TYPES = [
 def make_argument_parser() -> ArgumentParser:
 	parser = ArgumentParser(description='Dipole source localization tool for M/EEG recordings')
 	parser.add_argument('input', metavar='INPUT', help='input file with events to attempt to locate')
-	parser.add_argument('-q', '--quiet', action='store_true', help='do not show messages')
-	parser.add_argument('-s', '--subject', metavar='ID', required=True, help='FreeSurfer subject ID')
-	parser.add_argument('-d', '--subjects-dir', metavar='DIR', help='FreeSurfer subjects folder path')
+	
+	add_global_options(parser)
+	add_freesurfer_options(parser)
+	
 	parser.add_argument('-t', '--type', help='input file type', **use_first_as_default(INPUT_TYPES))
 	parser.add_argument('-f', '--fwd-file', metavar='FWD_FILE', required=True, help='path to forward solution file')
 	parser.add_argument('-m', '--method', help='method to compute inverse solution', **use_first_as_default(DSL_METHODS))
 	parser.add_argument('-t0', '--begin', metavar='TIME', type=float, help='start of recording frame to analyze')
 	parser.add_argument('-tN', '--end', metavar='TIME', type=float, help='end of recording frame to analyze')
-	parser.add_argument('-z', '--gzip', action='store_true', help='use gzip to compress output data')
-	parser.add_argument('-o', '--output', metavar='NAME', required=True, help='used as template for output files')
+	
+	add_output_options(parser)
 	
 	noise_opts = parser.add_mutually_exclusive_group()
 	noise_opts.add_argument('-n', '--noise-file', metavar='PATH', help='file containing empty room measurements')
@@ -67,13 +68,8 @@ def main() -> Optional[int]:
 		parser.exit(-1)
 	
 	args = parser.parse_args()
-	if args.quiet:
-		mne.set_log_level('warning')
-	
-	subjects_dir = os.getenv('SUBJECTS_DIR')
-	if args.subjects_dir:
-		mne.set_config('SUBJECTS_DIR', args.subjects_dir)
-		subjects_dir = args.subjects_dir
+	process_global_options(args)
+	process_freesurfer_options(args)
 	
 	raw, epochs, evoked = None, None, None
 	
