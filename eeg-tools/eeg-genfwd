@@ -8,12 +8,14 @@ from argparse import ArgumentParser
 import mne
 from mne.source_space import SourceSpaces
 
+from common import *
+
 BEM_METHODS = [
 	'watershed', 'flash'
 ]
 
 SOURCE_TYPES = [
-	'surface', 'volume'
+	'volume', 'surface'
 ]
 
 SOURCE_SPACING = [
@@ -26,23 +28,14 @@ def make_argument_parser() -> ArgumentParser:
 	parser.add_argument('-q', '--quiet', action='store_true', help='do not show messages')
 	parser.add_argument('-s', '--subject', metavar='ID', required=True, help='FreeSurfer subject ID')
 	parser.add_argument('-d', '--subjects-dir', metavar='DIR', help='FreeSurfer subjects folder path')
-	parser.add_argument('-b', '--bem-method', choices=BEM_METHODS, help='method to use for generating BEM surfaces')
-	parser.add_argument('-j', '--source-type', choices=SOURCE_TYPES, help='type of source space to generate')
+	parser.add_argument('-b', '--bem-method', choices=BEM_METHODS, default=BEM_METHODS[0], help='method to use for generating BEM surfaces')
+	parser.add_argument('-j', '--source-type', choices=SOURCE_TYPES, default=SOURCE_TYPES[0], help='type of source space to generate')
 	parser.add_argument('--source-spacing', choices=SOURCE_SPACING, default=SOURCE_SPACING[0], help='spacing for source spaces')
-	parser.add_argument('-t', '--transform', metavar='PATH', default='fsaverage', help='path to transformation FIF file')
+	parser.add_argument('-t', '--transform', metavar='PATH', type=parse_optional(str), default='fsaverage', help='path to transformation FIF file')
 	parser.add_argument('-r', '--regenerate', action='store_true', help='recreate intermediate files')
 	parser.add_argument('-z', '--gzip', action='store_true', help='use gzip to compress output data')
 	parser.add_argument('-o', '--output', metavar='NAME', required=True, help='used as template for output files')
 	return parser
-
-def make_output_filename(name, type=None, compress=False) -> str:
-	fname = name
-	if type:
-		fname += f'-{type}'
-	fname += '.fif'
-	if compress:
-		fname += '.gz'
-	return fname
 
 def generate_bem_solution(subject: str, **kwargs) -> mne.bem.ConductorModel:
 	surfaces = mne.make_bem_model(subject=subject, **kwargs)

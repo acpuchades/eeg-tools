@@ -7,6 +7,8 @@ from argparse import ArgumentParser
 import mne
 from mne.minimum_norm import make_inverse_operator, apply_inverse
 
+from common import *
+
 DSL_METHODS = [
 	'dSPM', 'MNE', 'sLORETA', 'eLORETA',
 ]

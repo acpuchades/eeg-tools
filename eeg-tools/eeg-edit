@@ -10,6 +10,8 @@ import matplotlib.pyplot as plt
 from mne.preprocessing import ICA
 from mne.io import Raw, read_raw
 
+from common import *
+
 ICA_METHODS = [
 	'fastica', 'infomax', 'picard',
 ]
@@ -29,12 +31,6 @@ MONTAGES = {
 		  'A1',  'A2', 'ECG1', 'ECG2',
 	],
 }
-
-def parse_optional(t: Callable[[str], any]):
-	return lambda x: None if x == 'none' else t(x)
-
-def parse_with_mapping(t: Callable[[str], any], mapping: Mapping[str, any]):
-	return lambda x: mapping.get(x) or t(x)
 
 def make_argument_parser() -> ArgumentParser:
 	MONTAGE_NAMES = [k for k in MONTAGES.keys()]
@@ -81,10 +77,17 @@ def make_argument_parser() -> ArgumentParser:
 	ica_opts.add_argument('--show-sources', action='store_true', help='show ICA components')
 	return parser
 
+def normalize_channel_names(raw: Raw) -> Raw:
+	mapping = {ch: ch.replace('FP', 'Fp') for ch in raw.ch_names
+	                                      if ch.startswith('FP')}
+	if 'OI' in raw.ch_names: mapping['OI'] = 'A1'
+	if 'OD' in raw.ch_names: mapping['OD'] = 'A2'
+	if mapping: raw.rename_channels(mapping)
+	return raw
+
 def load_file(fname: str) -> Optional[Raw]:
 	raw = read_raw(fname, preload=True)
-	raw.rename_channels({'FP1': 'Fp1', 'FP2': 'Fp2',
-	                      'OD':  'A1',  'OI':  'A2'})
+	normalize_channel_names(raw)
 	return raw
 
 def apply_signal_filters(raw: Raw, low_filter: float = None, high_filter: float = None, notch_filter: float = None) -> None:
@@ -112,15 +115,6 @@ def plot_pca_cumulative_variance(ica: ICA, show: bool = True, block: bool = Fals
 	
 	if show:
 		plt.show(block=block)
-
-def make_output_filename(name, type=None, compress=False) -> str:
-	fname = name
-	if type:
-		fname += f'-{type}'
-	fname += '.fif'
-	if compress:
-		fname += '.gz'
-	return fname
 
 def main() -> Optional[int]:
 	parser = make_argument_parser()
