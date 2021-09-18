@@ -128,5 +128,6 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-# FIF files
+# FIF and related files
 *.fif
+*.stc

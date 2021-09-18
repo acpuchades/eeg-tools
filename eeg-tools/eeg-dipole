@@ -1,11 +1,18 @@
 #!/usr/bin/python3
 
-import sys
+import os, sys
 from typing import *
 from argparse import ArgumentParser
 
 import mne
+from mne import Epochs, Evoked
+from mne.cov import compute_covariance, compute_raw_covariance
+from mne.io import Raw
+from mne.epochs import read_epochs
+from mne.evoked import read_evokeds
 from mne.minimum_norm import make_inverse_operator, apply_inverse
+from mne.minimum_norm.inverse import InverseOperator, apply_inverse_epochs, apply_inverse_raw
+from mne.source_estimate import SourceEstimate
 
 from common import *
 
@@ -14,24 +21,44 @@ DSL_METHODS = [
 ]
 
 INPUT_TYPES = [
-	'raw', 'events', 'evoked'
+	'raw', 'epochs', 'evokeds'
 ]
 
 def make_argument_parser() -> ArgumentParser:
 	parser = ArgumentParser(description='Dipole source localization tool for M/EEG recordings')
 	parser.add_argument('input', metavar='INPUT', help='input file with events to attempt to locate')
-	parser.add_argument('-t', '--type', help='input file type', **use_first_as_default(INPUT_TYPES))
 	parser.add_argument('-q', '--quiet', action='store_true', help='do not show messages')
+	parser.add_argument('-s', '--subject', metavar='ID', required=True, help='FreeSurfer subject ID')
+	parser.add_argument('-d', '--subjects-dir', metavar='DIR', help='FreeSurfer subjects folder path')
+	parser.add_argument('-t', '--type', help='input file type', **use_first_as_default(INPUT_TYPES))
 	parser.add_argument('-f', '--fwd-file', metavar='FWD_FILE', required=True, help='path to forward solution file')
 	parser.add_argument('-m', '--method', help='method to compute inverse solution', **use_first_as_default(DSL_METHODS))
+	parser.add_argument('-t0', '--begin', metavar='TIME', type=float, help='start of recording frame to analyze')
+	parser.add_argument('-tN', '--end', metavar='TIME', type=float, help='end of recording frame to analyze')
+	parser.add_argument('-z', '--gzip', action='store_true', help='use gzip to compress output data')
+	parser.add_argument('-o', '--output', metavar='NAME', required=True, help='used as template for output files')
+	
+	noise_opts = parser.add_mutually_exclusive_group()
+	noise_opts.add_argument('-n', '--noise-file', metavar='PATH', help='file containing empty room measurements')
+	nframe_opts = noise_opts.add_argument_group()
+	nframe_opts.add_argument('-n0', '--noise-begin', metavar='TIME', type=float, help='start of recording frame used to calculate noise covariance')
+	nframe_opts.add_argument('-nN', '--noise-end', metavar='TIME', type=float, help='end of recording frame used to calculate noise covariance')
 	
 	event_opts = parser.add_mutually_exclusive_group()
-	event_opts.add_argument('-s', '--stim', metavar='CHANNEL', help='use signals from trigger channel as events')
-	event_opts.add_argument('-a', '--annotated', metavar='REGEXP', help='use annotations matching REGEXP to mark events')
-	
-	parser.add_argument('-t0', dest='time_start', type=float, default=-0.2, help='offset from event used as epoch start in seconds (usually negative)')
-	parser.add_argument('-tn', dest='time_end', type=float, default=.5, help='offset from event used as epoch end in seconds')
+	event_opts.add_argument('--stim', metavar='CHANNEL', help='use signals from trigger channel as events')
+	event_opts.add_argument('--annotated', metavar='REGEXP', help='use annotations matching REGEXP to mark events')
+	eframe_opts = event_opts.add_argument_group()
+	eframe_opts.add_argument('-e0', '--event-begin', type=float, default=-0.2, help='offset from event used as epoch start in seconds (usually negative)')
+	eframe_opts.add_argument('-eN', '--event-end', type=float, default=.5, help='offset from event used as epoch end in seconds')
 	return parser
+
+def apply_inverse_operator(inv_op: InverseOperator, raw: Raw = None, epochs: Epochs = None, evoked: Evoked = None, **kwargs) -> SourceEstimate:
+	if evoked:
+		return apply_inverse(evoked, inv_op, **kwargs)
+	elif epochs:
+		return apply_inverse_epochs(epochs, inv_op, **kwargs)
+	elif raw:
+		return apply_inverse_raw(raw, inv_op, **kwargs)
 
 def main() -> Optional[int]:
 	parser = make_argument_parser()
@@ -40,28 +67,68 @@ def main() -> Optional[int]:
 		parser.exit(-1)
 	
 	args = parser.parse_args()
-	raw = mne.io.read_raw(args.input, preload=True)
+	if args.quiet:
+		mne.set_log_level('warning')
 	
-	if args.stim:
-		events = mne.find_events(raw, stim_channel=args.stim)
-		event_ids = None
-	elif args.annotated:
-		events, event_ids = mne.events_from_annotations(raw, regexp=args.annotations)
+	subjects_dir = os.getenv('SUBJECTS_DIR')
+	if args.subjects_dir:
+		mne.set_config('SUBJECTS_DIR', args.subjects_dir)
+		subjects_dir = args.subjects_dir
 	
-	epochs = mne.Epochs(raw, events, event_ids, tmin=args.time_start,
-	                    tmax=args.time_end, picks='data')
+	raw, epochs, evoked = None, None, None
+	
+	if args.type == 'raw':
+		raw = mne.io.read_raw(args.input, preload=True)
+		raw.set_eeg_reference('average', projection=True)
+	elif args.type == 'epochs':
+		epochs = read_epochs(args.input)
+	elif args.type == 'evoked':
+		evoked = read_evokeds(args.input)
+	
+	if raw and not epochs:
+		if args.stim:
+			events = mne.find_events(raw, stim_channel=args.stim)
+			event_ids = None
+		elif args.annotated:
+			events, event_ids = mne.events_from_annotations(raw, regexp=args.annotations)
+		else:
+			events = None
+		
+		if events:
+			begin, end = raw.time_as_index([args.event_begin, args.event_end])
+			epochs = mne.Epochs(raw, events, event_ids, tmin=begin, tmax=end, picks='data')
+	
+	if epochs and not evoked:
+		evoked = epochs.average()
 	
 	fwd = mne.read_forward_solution(args.fwd_file)
 	
-	evoked = epochs.average().pick('data')
-	inv_op = make_inverse_operator(evoked.info, fwd, noise_cov=None)
+	if args.noise_file:
+		noise_raw = mne.io.read_raw(args.noise_file)
+	elif raw and args.noise_begin or args.noise_end:
+		begin, end = raw.time_as_index([args.noise_begin or 0, args.noise_end])
+		noise_raw = raw.copy().crop(begin, end)
+	else:
+		noise_raw = None
 	
-	snr = 3.
-	lambda2 = 1. / snr ** 2
-	stc, resid = apply_inverse(evoked, inv_op, lambda2, method=args.method,
-	                           pick_ori=None, return_residual=True)
+	if noise_raw:
+		noise_cov = compute_raw_covariance(noise_raw)
+	elif epochs:
+		noise_cov = compute_covariance(epochs, tmax=-0.01)
 	
-	pass
+	info = (raw or epochs or evoked).info
+	inv_op = make_inverse_operator(info, fwd, noise_cov)
+	
+	snr = 3 if epochs or evoked else 1
+	lambda2 = snr ** -2
+	stc_method = args.method
+	begin, end = (raw or epochs or evoked).time_as_index([args.begin, args.end])
+	stc = apply_inverse_operator(inv_op, raw=raw, epochs=epochs, evoked=evoked,
+	                             start=begin, stop=end, lambda2=lambda2, method=args.method)
+	
+	stc_name = f'{stc_method}_stc'
+	stc_file = make_output_filename(args.output, stc_name, compress=args.gzip)
+	stc.save(stc_file)
 
 if __name__ == '__main__':
 	try:
@@ -75,4 +142,3 @@ if __name__ == '__main__':
 	except Exception as e:
 		print(f'Error: {e}.', file=sys.stderr)
 		sys.exit(-1)
-
