@@ -32,13 +32,21 @@ MONTAGES = {
 	],
 }
 
+INTERP_MODES = [
+	'accurate', 'fast'
+]
+
+INTERP_METHODS = [
+	'spline', 'MNE'
+]
+
 def make_argument_parser() -> ArgumentParser:
 	MONTAGE_NAMES = [k for k in MONTAGES.keys()]
 	parse_notch_filter = parse_optional(parse_with_mapping(float, {'europe': 50, 'usa': 60}))
 	
 	parser = ArgumentParser(description='M/EEG signal data preprocessing tool')
 	parser.add_argument('input', metavar='INPUT', help='input file to analyze')
-	parser.add_argument('-q', '--quiet', action='store_true', help='do not show messages')
+	
 	parser.add_argument('-t', '--type', help='type of analized data', **use_first_as_default(DATA_TYPES))
 	parser.add_argument('-i', '--ica', action='store_true', help='perform ICA decomposition')
 	add_output_options(parser)
@@ -62,6 +70,12 @@ def make_argument_parser() -> ArgumentParser:
 	filter_opts.add_argument('-fl', '--filter-low', metavar='FREQ', type=parse_optional(float), default=.3, help='low frequency filter in Hz')
 	filter_opts.add_argument('-fh', '--filter-high', metavar='FREQ', type=parse_optional(float), default=70, help='high frequency filter in Hz')
 	filter_opts.add_argument('-fn', '--filter-notch', metavar='FREQ', type=parse_notch_filter, default=50, help='notch frequency filter in Hz')
+	
+	# Interpolation options
+	interp_opts = parser.add_argument_group('channel interpolation options')
+	interp_opts.add_argument('--interpolate-bads', action='store_true', default=True, help='interpolate channels marked as bad')
+	interp_opts.add_argument('--interpolate-mode', help='channel interpolation mode', **use_first_as_default(INTERP_MODES))
+	interp_opts.add_argument('--interpolate-method', choices=INTERP_METHODS, help = 'channel interpolation method to use')
 	
 	# ICA options
 	ica_opts = parser.add_argument_group('ICA options')
@@ -162,6 +176,10 @@ def main() -> Optional[int]:
 	apply_signal_filters(raw, low_filter=args.filter_low,
 	                          high_filter=args.filter_high,
 	                          notch_filter=fnotch_freqs)
+	
+	if args.interpolate_bads:
+		raw.plot(block=True)
+		raw.interpolate_bads(mode=args.interpolate_mode, method=args.interpolate_method)
 	
 	if is_ica_analysis_required(args):
 		filtered = raw.copy().pick('data')
