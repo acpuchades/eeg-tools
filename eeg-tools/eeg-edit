@@ -163,9 +163,11 @@ def main() -> Optional[int]:
 	if args.exclude:
 		raw.drop_channels(args.exclude)
 	
-	projection = args.reference == 'average'
-	raw.set_eeg_reference(args.reference, projection)
+	average_proj = args.reference == 'average'
 	raw.set_montage(args.montage, on_missing='warn')
+	raw.set_eeg_reference(args.reference, average_proj)
+	if average_proj:
+		raw.apply_proj()
 
 	if args.filter_notch:
 		freq = args.filter_notch
