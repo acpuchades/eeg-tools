@@ -47,7 +47,8 @@ def make_argument_parser() -> ArgumentParser:
 	parser = ArgumentParser(description='M/EEG signal data preprocessing tool')
 	parser.add_argument('input', metavar='INPUT', help='input file to analyze')
 	parser.add_argument('-t', '--type', help='type of analized data', **use_first_as_default(DATA_TYPES))
-	parser.add_argument('-i', '--ica', action='store_true', help='perform ICA decomposition')
+	parser.add_argument('-i', '--interactive', action='store_true', help='show windows for interactive editing')
+	parser.add_argument('--ica', action='store_true', help='perform ICA decomposition')
 	parser.add_argument('--resample', metavar='FREQ', type=int, help='resample data at given frequency')
 	add_output_options(parser)
 	add_logging_options(parser)
@@ -89,7 +90,6 @@ def make_argument_parser() -> ArgumentParser:
 	ica_opts.add_argument('--ica-exclude-ecg', action='store_true', help='exclude ICA sources detected as ECG')
 	ica_opts.add_argument('--ica-exclude-eog', action='store_true', help='exclude ICA sources detected as EOG')
 	ica_opts.add_argument('--ica-show-pca-variance', action='store_true', help='show cumulative PCA variance')
-	ica_opts.add_argument('--ica-show-components', action='store_true', help='show ICA sources')
 	ica_opts.add_argument('--ica-show-sources', action='store_true', help='show ICA components')
 	return parser
 
@@ -182,8 +182,10 @@ def main() -> Optional[int]:
 	if args.resample:
 		raw.resample(sfreq=args.resample)
 	
-	if args.interpolate_bads:
+	if args.interactive:
 		raw.plot(block=True)
+	
+	if args.interpolate_bads:
 		raw.interpolate_bads(mode=args.interpolate_mode, method=args.interpolate_method)
 	
 	if is_ica_analysis_required(args):
@@ -207,16 +209,13 @@ def main() -> Optional[int]:
 			ica.exclude.extend(eog_ids)
 		
 		if args.ica_show_sources:
-			ica.plot_components(inst=filtered, show=False)
-			plt.show(block=False)
-		
-		if args.ica or args.ica_show_components:
 			ica.plot_sources(inst=filtered, block=True)
+			plt.show()
+			
+		if args.interactive:
+			ica.plot_components(inst=filtered, show=False)
 		
 		ica.apply(raw, n_pca_components=pca_components)
-	
-	if args.show:
-		raw.plot(block=True)
 	
 	if args.output:
 		out_file = make_output_filename(args.output, args.type, compress=args.gzip)
