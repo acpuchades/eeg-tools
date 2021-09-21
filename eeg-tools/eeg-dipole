@@ -16,6 +16,7 @@ from mne.source_estimate import SourceEstimate
 
 from common import *
 
+
 DSL_METHODS = [
 	'dSPM', 'MNE', 'sLORETA', 'eLORETA',
 ]
@@ -26,18 +27,16 @@ INPUT_TYPES = [
 
 def make_argument_parser() -> ArgumentParser:
 	parser = ArgumentParser(description='Dipole source localization tool for M/EEG recordings')
-	parser.add_argument('input', metavar='INPUT', help='input file with events to attempt to locate')
 	
-	add_global_options(parser)
 	add_freesurfer_options(parser)
-	
+	parser.add_argument('input', metavar='INPUT', help='input file with events to attempt to locate')
 	parser.add_argument('-t', '--type', help='input file type', **use_first_as_default(INPUT_TYPES))
 	parser.add_argument('-f', '--fwd-file', metavar='FWD_FILE', required=True, help='path to forward solution file')
 	parser.add_argument('-m', '--method', help='method to compute inverse solution', **use_first_as_default(DSL_METHODS))
 	parser.add_argument('-t0', '--begin', metavar='TIME', type=float, help='start of recording frame to analyze')
 	parser.add_argument('-tN', '--end', metavar='TIME', type=float, help='end of recording frame to analyze')
-	
 	add_output_options(parser)
+	add_logging_options(parser)
 	
 	noise_opts = parser.add_mutually_exclusive_group()
 	noise_opts.add_argument('-n', '--noise-file', metavar='PATH', help='file containing empty room measurements')
@@ -51,6 +50,7 @@ def make_argument_parser() -> ArgumentParser:
 	eframe_opts = event_opts.add_argument_group()
 	eframe_opts.add_argument('-e0', '--event-begin', type=float, default=-0.2, help='offset from event used as epoch start in seconds (usually negative)')
 	eframe_opts.add_argument('-eN', '--event-end', type=float, default=.5, help='offset from event used as epoch end in seconds')
+	
 	return parser
 
 def apply_inverse_operator(inv_op: InverseOperator, raw: Raw = None, epochs: Epochs = None, evoked: Evoked = None, **kwargs) -> SourceEstimate:
@@ -68,7 +68,7 @@ def main() -> Optional[int]:
 		parser.exit(-1)
 	
 	args = parser.parse_args()
-	process_global_options(args)
+	process_logging_options(args)
 	process_freesurfer_options(args)
 	
 	raw, epochs, evoked = None, None, None
@@ -116,14 +116,12 @@ def main() -> Optional[int]:
 	inv_op = make_inverse_operator(info, fwd, noise_cov)
 	
 	snr = 3 if epochs or evoked else 1
-	lambda2 = snr ** -2
+	lambda2 = 1 / snr ** 2
 	stc_method = args.method
 	begin, end = (raw or epochs or evoked).time_as_index([args.begin, args.end])
 	stc = apply_inverse_operator(inv_op, raw=raw, epochs=epochs, evoked=evoked,
 	                             start=begin, stop=end, lambda2=lambda2, method=args.method)
-	
-	stc_name = f'{stc_method}_stc'
-	stc_file = make_output_filename(args.output, stc_name, compress=args.gzip)
+	stc_file = make_output_filename(args.output, stc_method, ext=None)
 	stc.save(stc_file)
 
 if __name__ == '__main__':
