@@ -46,9 +46,9 @@ def make_argument_parser() -> ArgumentParser:
 	
 	parser = ArgumentParser(description='M/EEG signal data preprocessing tool')
 	parser.add_argument('input', metavar='INPUT', help='input file to analyze')
-	
 	parser.add_argument('-t', '--type', help='type of analized data', **use_first_as_default(DATA_TYPES))
 	parser.add_argument('-i', '--ica', action='store_true', help='perform ICA decomposition')
+	parser.add_argument('--resample', metavar='FREQ', type=int, help='resample data at given frequency')
 	add_output_options(parser)
 	add_logging_options(parser)
 	
@@ -178,6 +178,9 @@ def main() -> Optional[int]:
 	apply_signal_filters(raw, low_filter=args.filter_low,
 	                          high_filter=args.filter_high,
 	                          notch_filter=fnotch_freqs)
+
+	if args.resample:
+		raw.resample(sfreq=args.resample)
 	
 	if args.interpolate_bads:
 		raw.plot(block=True)
