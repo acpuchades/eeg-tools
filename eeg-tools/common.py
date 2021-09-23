@@ -29,11 +29,23 @@ def make_output_filename(name: str, type: str = None, ext: str='fif', compress: 
 		fname += '.gz'
 	return fname
 
-def parse_optional(t: Callable[[str], any]):
+def parse_optional(t: Callable[[str], any]) -> Callable[[str], any]:
 	return lambda x: None if x == 'none' else t(x)
 
-def parse_with_mapping(t: Callable[[str], any], mapping: Mapping[str, any]):
+def parse_with_mapping(t: Callable[[str], any], mapping: Mapping[str, any]) -> Callable[[str], any]:
 	return lambda x: mapping.get(x) or t(x)
+
+def parse_either_as(*ts: Iterable[Callable[[str], any]]) -> Callable[[str], any]:
+	
+	def __helper(x: str) -> any:
+		for t in ts:
+			try:
+				return t(x)
+			except:
+				pass
+		return None
+	
+	return __helper
 
 def process_freesurfer_options(args: dict) -> None:
 	subjects_dir = os.getenv('SUBJECTS_DIR')
