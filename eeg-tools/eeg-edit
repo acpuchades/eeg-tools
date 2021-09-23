@@ -53,8 +53,6 @@ def make_argument_parser() -> ArgumentParser:
 	add_output_options(parser)
 	add_logging_options(parser)
 	
-	parser.add_argument('--show', action='store_true', help='show result EEG data')
-	
 	# Montage options
 	montage_opts = parser.add_argument_group('montage options')
 	montage_opts.add_argument('-m', '--montage', help='apply selected montage', **use_first_as_default(MONTAGE_NAMES))
