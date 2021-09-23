@@ -14,7 +14,7 @@ from mne.minimum_norm import make_inverse_operator, apply_inverse, write_inverse
 from mne.minimum_norm.inverse import InverseOperator, apply_inverse_epochs, apply_inverse_raw
 from mne.source_estimate import SourceEstimate
 
-from common import *
+from .common import *
 
 
 DSL_METHODS = [

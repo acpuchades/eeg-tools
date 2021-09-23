@@ -8,7 +8,7 @@ from argparse import ArgumentParser
 import mne
 from mne.source_space import SourceSpaces
 
-from common import *
+from .common import *
 
 BEM_METHODS = [
 	'watershed', 'flash'

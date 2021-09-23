@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from mne.preprocessing import ICA
 from mne.io import Raw, read_raw
 
-from common import *
+from .common import *
 
 ICA_METHODS = [
 	'fastica', 'infomax', 'picard',
