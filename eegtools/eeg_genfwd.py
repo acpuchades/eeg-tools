@@ -20,13 +20,13 @@ SOURCE_TYPES = [
 
 def make_argument_parser() -> ArgumentParser:
 	parser = ArgumentParser(description='Generate forward solution to use with DSL')
-	parser.add_argument('input', metavar='INPUT', help='input file to compute forward solution for')
+	parser.add_argument('input', metavar='FIF_FILE', help='input file to compute forward solution for')
 	
 	add_freesurfer_options(parser)
 	parser.add_argument('-b', '--bem-method', help='method to use for generating BEM surfaces', **use_first_as_default(BEM_METHODS))
 	parser.add_argument('-j', '--source-spacing', type=parse_either_as(float, str), help='spacing for source spaces')
 	parser.add_argument('-p', '--source-type', help='type of source space to generate', **use_first_as_default(SOURCE_TYPES))
-	parser.add_argument('-t', '--transform', metavar='TRANS_FILE', type=parse_optional(str), help='path to transformation FIF file')
+	parser.add_argument('-t', '--transform', required=True, metavar='TRANS_FILE', type=parse_optional(str), help='path to transformation FIF file')
 	parser.add_argument('-r', '--regenerate', action='store_true', help='recreate intermediate files')
 	add_output_options(parser)
 	add_logging_options(parser)

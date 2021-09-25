@@ -29,7 +29,7 @@ def make_argument_parser() -> ArgumentParser:
 	parser = ArgumentParser(description='Dipole source localization tool for M/EEG recordings')
 	
 	add_freesurfer_options(parser)
-	parser.add_argument('input', metavar='INPUT', help='input file with events to attempt to locate')
+	parser.add_argument('input', metavar='FIF_FILE', help='input file with events to attempt to locate')
 	parser.add_argument('-t', '--type', help='input file type', **use_first_as_default(INPUT_TYPES))
 	parser.add_argument('-f', '--fwd-file', metavar='FWD_FILE', required=True, help='path to forward solution file')
 	parser.add_argument('-m', '--method', help='method to compute inverse solution', **use_first_as_default(DSL_METHODS))
@@ -39,7 +39,7 @@ def make_argument_parser() -> ArgumentParser:
 	add_logging_options(parser)
 	
 	noise_opts = parser.add_argument_group('noise options')
-	noise_opts.add_argument('-n', '--noise-file', metavar='PATH', help='file containing empty room measurements')
+	noise_opts.add_argument('-n', '--noise-file', metavar='FIF_FILE', help='file containing empty room measurements')
 	noise_opts.add_argument('-n0', '--noise-begin', metavar='TIME', type=float, help='start of recording frame used to calculate noise covariance')
 	noise_opts.add_argument('-nN', '--noise-end', metavar='TIME', type=float, help='end of recording frame used to calculate noise covariance')
 	

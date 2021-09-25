@@ -45,7 +45,7 @@ def make_argument_parser() -> ArgumentParser:
 	parse_notch_filter = parse_optional(parse_with_mapping(float, {'europe': 50, 'usa': 60}))
 	
 	parser = ArgumentParser(description='M/EEG signal data preprocessing tool')
-	parser.add_argument('input', metavar='INPUT', help='input file to analyze')
+	parser.add_argument('input', metavar='INPUT_FILE', help='input file to analyze')
 	parser.add_argument('-t', '--type', help='type of analized data', **use_first_as_default(DATA_TYPES))
 	parser.add_argument('-i', '--interactive', action='store_true', help='show windows for interactive editing')
 	parser.add_argument('--ica', action='store_true', help='perform ICA decomposition')
