@@ -100,11 +100,13 @@ def main() -> Optional[int]:
 	
 	if args.noise_file:
 		noise_raw = mne.io.read_raw(args.noise_file)
-	elif raw and args.noise_begin or args.noise_end:
-		begin, end = raw.time_as_index([args.noise_begin or 0, args.noise_end])
-		noise_raw = raw.copy().crop(begin, end)
+	elif args.noise_begin or args.noise_end:
+		noise_raw = raw.copy()
 	else:
 		noise_raw = None
+	
+	if noise_raw and args.noise_begin or args.noise_end:
+		noise_raw = noise_raw.crop(args.noise_begin, args.noise_end)
 	
 	if noise_raw:
 		noise_cov = compute_raw_covariance(noise_raw)
