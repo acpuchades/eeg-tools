@@ -4,14 +4,19 @@ from argparse import ArgumentParser
 
 import mne
 
+def add_freesurfer_options(parser: ArgumentParser) -> ArgumentParser:
+	parser.add_argument('-s', '--subject', metavar='ID', required=True, help='FreeSurfer subject ID')
+	parser.add_argument('-d', '--subjects-dir', metavar='DIR', help='FreeSurfer subjects folder path')
+	return parser
+
 def add_logging_options(parser: ArgumentParser) -> ArgumentParser:
 	loglevel_opts = parser.add_mutually_exclusive_group()
 	loglevel_opts.add_argument('-q', '--quiet', action='store_true', help='do not show messages')
 	loglevel_opts.add_argument('-v', '--verbose', action='count', help='show additional info')
+	return parser
 
-def add_freesurfer_options(parser: ArgumentParser) -> ArgumentParser:
-	parser.add_argument('-s', '--subject', metavar='ID', required=True, help='FreeSurfer subject ID')
-	parser.add_argument('-d', '--subjects-dir', metavar='DIR', help='FreeSurfer subjects folder path')
+def add_parallel_options(parser: ArgumentParser) -> ArgumentParser:
+	parser.add_argument('-j', '--jobs', type=int, help='number of jobs to use in parallel code')
 	return parser
 
 def add_output_options(parser: ArgumentParser) -> ArgumentParser:
@@ -48,10 +53,8 @@ def parse_either_as(*ts: Iterable[Callable[[str], any]]) -> Callable[[str], any]
 	return __helper
 
 def process_freesurfer_options(args: dict) -> None:
-	subjects_dir = os.getenv('SUBJECTS_DIR')
 	if args.subjects_dir:
 		mne.set_config('SUBJECTS_DIR', args.subjects_dir)
-		subjects_dir = args.subjects_dir
 
 def process_logging_options(args: dict) -> None:
 	if args.quiet:
@@ -61,6 +64,11 @@ def process_logging_options(args: dict) -> None:
 			mne.set_log_level('INFO')
 		elif args.verbose >= 2:
 			mne.set_log_level('DEBUG')
+
+def process_parallel_options(args: dict) -> None:
+	if args.jobs:
+		os.environ['OMP_NUM_THREADS'] = str(args.jobs)
+		os.environ['OPENBLAS_NUM_THREADS'] = str(args.jobs)
 
 def use_first_as_default(choices: List[str]) -> dict:
 	return {'choices': choices, 'default': choices[0]}

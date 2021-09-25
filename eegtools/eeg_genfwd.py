@@ -24,10 +24,11 @@ def make_argument_parser() -> ArgumentParser:
 	
 	add_freesurfer_options(parser)
 	parser.add_argument('-b', '--bem-method', help='method to use for generating BEM surfaces', **use_first_as_default(BEM_METHODS))
-	parser.add_argument('-j', '--source-spacing', type=parse_either_as(float, str), help='spacing for source spaces')
-	parser.add_argument('-p', '--source-type', help='type of source space to generate', **use_first_as_default(SOURCE_TYPES))
+	parser.add_argument('--source-spacing', type=parse_either_as(float, str), help='spacing for source spaces')
+	parser.add_argument('--source-type', help='type of source space to generate', **use_first_as_default(SOURCE_TYPES))
 	parser.add_argument('-t', '--transform', required=True, metavar='TRANS_FILE', type=parse_optional(str), help='path to transformation FIF file')
 	parser.add_argument('-r', '--regenerate', action='store_true', help='recreate intermediate files')
+	add_parallel_options(parser)
 	add_output_options(parser)
 	add_logging_options(parser)
 	
@@ -59,6 +60,7 @@ def main() -> Optional[int]:
 	args = parser.parse_args()
 	process_logging_options(args)
 	process_freesurfer_options(args)
+	process_parallel_options(args)
 	
 	raw = mne.io.read_raw(args.input)
 	
@@ -91,13 +93,14 @@ def main() -> Optional[int]:
 	if not src_space:
 		if args.source_type == 'surface':
 			src_space = generate_source_space(args.subject, 'surface',
-			                                  spacing=args.source_spacing)
+			                                  spacing=args.source_spacing,
+			                                  n_jobs=args.jobs or 1)
 		if args.source_type == 'volume':
-			src_space = generate_source_space(args.subject, 'volume')
+			src_space = generate_source_space(args.subject, 'volume', n_jobs=args.jobs or 1)
 		mne.write_source_spaces(src_file, src_space, overwrite=True)
 	
 	fwd_type = f'{args.source_spacing}_fwd'
-	fwd = mne.make_forward_solution(raw.info, args.transform, src_space, bem)
+	fwd = mne.make_forward_solution(raw.info, args.transform, src_space, bem, n_jobs=args.jobs or 1)
 	output_file = make_output_filename(args.output, fwd_type, compress=args.gzip)
 	mne.write_forward_solution(output_file, fwd, overwrite=True)
 

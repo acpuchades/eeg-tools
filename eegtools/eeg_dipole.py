@@ -37,6 +37,7 @@ def make_argument_parser() -> ArgumentParser:
 	parser.add_argument('-tN', '--end', metavar='TIME', type=float, help='end of recording frame to analyze')
 	add_output_options(parser)
 	add_logging_options(parser)
+	add_parallel_options(parser)
 	
 	noise_opts = parser.add_argument_group('noise options')
 	noise_opts.add_argument('-n', '--noise-file', metavar='FIF_FILE', help='file containing empty room measurements')
@@ -69,6 +70,7 @@ def main() -> Optional[int]:
 	args = parser.parse_args()
 	process_logging_options(args)
 	process_freesurfer_options(args)
+	process_parallel_options(args)
 	
 	raw, epochs, evoked = None, None, None
 	
@@ -106,12 +108,12 @@ def main() -> Optional[int]:
 		noise_raw = None
 	
 	if noise_raw and args.noise_begin or args.noise_end:
-		noise_raw = noise_raw.crop(args.noise_begin, args.noise_end)
+		noise_raw = noise_raw.crop(args.noise_begin or 0, args.noise_end)
 	
 	if noise_raw:
-		noise_cov = compute_raw_covariance(noise_raw)
+		noise_cov = compute_raw_covariance(noise_raw, n_jobs=args.jobs or 1)
 	elif epochs:
-		noise_cov = compute_covariance(epochs, tmax=-0.01)
+		noise_cov = compute_covariance(epochs, tmax=-0.01, n_jobs=args.jobs or 1)
 	
 	info = (raw or epochs or evoked).info
 	inv_op = make_inverse_operator(info, fwd, noise_cov)
